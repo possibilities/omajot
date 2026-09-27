@@ -396,6 +396,16 @@ For a hub that must survive reboots without a login:
   release workflow pushes it with a deploy key (secret `TAP_DEPLOY_KEY`).
 - `omajot --version`.
 
+## Web app storage (decided 2026-09-27)
+
+A browser may clear a site's storage ("best effort") under disk pressure;
+unsynced outbox batches and unuploaded pictures would go with it. The web app
+calls `navigator.storage.persist()` at startup (Chrome and Safari decide
+without a prompt; Firefox prompts, so there the status dialog offers a button)
+and shows `persisted()` in a Sync and storage dialog behind the status line.
+The risk is small and stated plainly: with Tailscale the devices are usually
+online while editing, and what reached the hub is safe.
+
 ## Known follow-ups (first build, 2026-09-25)
 
 - **Engine idle deadline**: bounded/http counts keep-alive idle time toward the next

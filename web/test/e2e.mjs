@@ -243,6 +243,18 @@ try {
   await wait(phone, () => [...window.omajot.state.notes.values()].some(n => n.pinned && n.folder && window.omajot.state.folders.some(f => f.id === n.folder && f.name === 'Household')))
   await shot(desktop, 'desktop-three-columns')
 
+  step('the status line opens Sync and storage; the app asked to keep its storage')
+  await desktop.click('.status')
+  await desktop.waitForSelector('.status-modal')
+  await shot(desktop, 'desktop-status')
+  const statusText = await desktop.$eval('.status-modal', el => el.textContent)
+  if (!/Sync:/.test(statusText) || !/This device:/.test(statusText)) throw new Error('status dialog: ' + statusText)
+  const kept = await desktop.evaluate(() => window.omajot.state.storage)
+  if (!['persisted', 'best-effort', 'unknown'].includes(kept)) throw new Error('storage state: ' + kept)
+  step('  storage: ' + kept)
+  await desktop.click('.status-modal [data-cancel]')
+  await wait(desktop, () => !document.querySelector('.status-modal'))
+
   step('hub goes away: the phone reloads offline from the service worker')
   await phone.evaluate(() => navigator.serviceWorker.ready)
   await phone.reload()

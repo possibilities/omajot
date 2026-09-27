@@ -152,6 +152,9 @@ input { font: inherit; color: inherit; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-faint); }
 .status[data-tone="ok"] .dot { background: var(--ok); }
 .status[data-tone="warn"] .dot { background: var(--warn); }
+.status { cursor: pointer; }
+.status:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.status-modal p { line-height: 1.45; }
 
 /* ------------------------------------------------------------ list */
 

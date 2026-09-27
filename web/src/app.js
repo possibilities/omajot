@@ -7,6 +7,7 @@ import { Attachments } from './attach.js'
 import { icon } from './icons.js'
 import { qrSvg } from './qr.js'
 import { attachPull } from './pull.js'
+import { storageState, askPersist, persistPrompts, storageText } from './storage.js'
 import { notesFor, sections, tagCounts, folderTree, folderCounts, syncLine, shortDate } from './model.js'
 
 const $ = (sel, root = document) => root.querySelector(sel)
@@ -25,6 +26,7 @@ const state = {
   createdHere: new Set(),
   mode: store.get('mode', 'edit'), // edit | preview | split
   sync: null,
+  storage: 'unknown', // persisted | best-effort | unknown (storage.js)
 }
 
 let replica, editor, attachments
@@ -42,7 +44,7 @@ function shell() {
         <button class="icon-btn" data-act="new-folder" title="New folder">${icon('folderPlus')}</button>
       </header>
       <nav class="folders scroll"></nav>
-      <footer class="status"><span class="dot"></span><span class="status-text">Starting…</span></footer>
+      <footer class="status" role="button" tabindex="0" title="Sync and storage"><span class="dot"></span><span class="status-text">Starting…</span></footer>
     </aside>
     <section class="pane p-list" aria-label="Notes">
       <header class="bar">
@@ -414,6 +416,42 @@ function showOnPhone() {
   $('[data-cancel]', root).focus()
 }
 
+// Sync and storage: the status line, opened by a click on it.
+async function showStatus() {
+  state.storage = await storageState()
+  const line = syncLine(state.sync)
+  const offer = state.storage === 'best-effort'
+  const root = $('.modal-root')
+  root.innerHTML = `
+    <div class="modal-scrim"></div>
+    <div class="modal status-modal" role="dialog" aria-modal="true" aria-label="Sync and storage">
+      <h2>Sync and storage</h2>
+      <p><strong>Sync:</strong> ${escapeHtml(line.text)}</p>
+      <p><strong>This device:</strong> ${escapeHtml(storageText(state.storage))}</p>
+      <div class="modal-buttons">
+        ${offer ? '<button data-persist class="strong">Keep them here</button>' : ''}
+        <button data-cancel>Close</button>
+      </div>
+    </div>`
+  root.classList.add('open')
+  const close = () => {
+    root.classList.remove('open')
+    root.innerHTML = ''
+    document.removeEventListener('keydown', onKey, true)
+  }
+  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close() } }
+  document.addEventListener('keydown', onKey, true)
+  root.onclick = async (e) => {
+    if (e.target.classList.contains('modal-scrim') || e.target.closest('[data-cancel]')) return close()
+    if (e.target.closest('[data-persist]')) {
+      state.storage = await askPersist()
+      close()
+      toast(state.storage === 'persisted' ? 'The browser keeps the notes on this device' : 'The browser did not agree to keep the notes')
+    }
+  }
+  $('[data-cancel]', root).focus()
+}
+
 function ask(opts) {
   return new Promise((resolve) => {
     const root = $('.modal-root')
@@ -471,6 +509,9 @@ function closeSidebar() { app.classList.remove('sidebar-open') }
 // ------------------------------------------------------------------ events
 
 function wire() {
+  const status = $('.status')
+  status.addEventListener('click', showStatus)
+  status.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showStatus() } })
   app.addEventListener('click', (e) => {
     const src = e.target.closest('[data-src]')
     const act = e.target.closest('[data-act]')?.dataset.act
@@ -654,6 +695,9 @@ async function main() {
   render()
   app.classList.remove('loading')
   await replica.start()
+  // Ask the browser to keep the replica. Chrome and Safari decide without a
+  // prompt; Firefox would ask, so there the status dialog offers it instead.
+  state.storage = persistPrompts() ? await storageState() : await askPersist()
 
   // Pull to refresh (the home-screen app has no reload): sync now, and load a
   // new omajot version when the service worker finds one.
