@@ -3,7 +3,7 @@
 // App shell: cache-first, refreshed in the background, so the app opens
 // offline. Attachments (/api/blobs/*) are immutable: cache-first forever.
 // Everything else under /api/ (batches, events, whoami) is never cached.
-const VERSION = '865640b9b086'
+const VERSION = 'ce9a7a009925'
 const SHELL = 'omajot-shell-' + VERSION
 const BLOBS = 'omajot-blobs'
 const ASSETS = ["./","app.js","app.css","manifest.webmanifest","icons/icon-180.png","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-512.png","icons/icon.svg","core.wasm"]

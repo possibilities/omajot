@@ -276,7 +276,7 @@ input { font: inherit; color: inherit; }
 }
 .md table { border-collapse: collapse; margin: 0 0 0.8em; display: block; overflow-x: auto; }
 .md th, .md td { border: 1px solid var(--sep); padding: 6px 10px; }
-.md hr { border: 0; border-top: 1px solid var(--sep); margin: 1.2em 0; }
+.md hr { border: 0; border-top: 2px solid var(--fg-muted); opacity: 0.45; margin: 1.4em 0; }
 .md .tag { color: var(--accent-strong); background: var(--tag-bg); border-radius: 5px; padding: 0 3px; }
 
 /* ------------------------------------------------------------ dialogs */
