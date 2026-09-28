@@ -3,10 +3,11 @@ import Quickshell
 import qs.Commons
 import "../Model.mjs" as Model
 
-// Rendered markdown for one note. Images are lifted into their own segments
-// and drawn by Image items (Qt's Markdown renderer paints nothing for file://
-// images in the shell); task boxes are `task:<line>` links that ask the owner
-// to toggle the checkbox in the source.
+// Rendered markdown for one note, with the web app's renderer (Model.previewHtml):
+// text in a proportional font, code in the bar's monospace font. Images are
+// lifted into their own segments and drawn by Image items (Qt's rich text
+// paints nothing for file:// images in the shell); task boxes are
+// `task:<line>` links that ask the owner to toggle the checkbox in the source.
 Flickable {
   id: root
 
@@ -17,7 +18,11 @@ Flickable {
   property int reloadStamp: 0
   property color foreground: Color.foreground
   property color accent: Color.accent
+  property color background: Color.background
+  property color muted: Color.muted
+  // Code and the checkbox glyphs; the text uses the proportional font.
   property string fontFamily: Style.font.family
+  property string proseFamily: "sans-serif"
   property real fontSize: Style.font.bodySmall
 
   signal taskToggled(int line)
@@ -31,9 +36,20 @@ Flickable {
   readonly property var styling: ({
     linkColor: hexOf(root.accent),
     textColor: hexOf(root.foreground),
-    fontSizePx: root.fontSize,
-    tableBorderColor: hexOf(Qt.darker(root.foreground, 2.2))
+    mutedColor: hexOf(root.muted),
+    background: hexOf(root.background),
+    codeBackground: hexOf(Qt.tint(root.background, Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08))),
+    borderColor: hexOf(Qt.tint(root.background, Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.22))),
+    fontSizePx: Math.round(root.fontSize * 1.1),
+    monoFamily: root.fontFamily
   })
+
+  function segmentHtml(segment, index) {
+    var options = Object.assign({}, root.styling)
+    options.startLine = segment.line
+    options.title = index === 0 && segment.line === 0
+    return Model.previewHtml(segment.text, options)
+  }
 
   contentWidth: width
   contentHeight: column.implicitHeight
@@ -57,6 +73,7 @@ Flickable {
       delegate: Item {
         id: segment
         required property var modelData
+        required property int index
         readonly property bool isImage: segment.modelData.kind === "image"
 
         width: column.width
@@ -69,11 +86,11 @@ Flickable {
           id: segmentText
           visible: !segment.isImage
           width: parent.width
-          text: segment.isImage ? "" : Model.styleMarkdown(segment.modelData.text, root.styling)
-          textFormat: Text.MarkdownText
+          text: segment.isImage ? "" : root.segmentHtml(segment.modelData, segment.index)
+          textFormat: Text.RichText
           color: root.foreground
           linkColor: root.accent
-          font.family: root.fontFamily
+          font.family: root.proseFamily
           font.pixelSize: root.fontSize
           wrapMode: Text.Wrap
           onLinkActivated: function(link) {

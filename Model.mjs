@@ -5,6 +5,8 @@
 // `node --test tests/` covers them. Positions are UTF-16 code units, the same
 // units QString, JS strings and the daemon protocol use (docs/PROTOCOL.md §1).
 
+import { renderMarkdown } from "./web/src/markdown.js"
+
 export const PLUGIN_ID = "io.github.renerocksai.omajot"
 // No built-in hub: each user runs their own. "" = let the daemon use its config.
 export const DEFAULT_HUB_URL = ""
@@ -778,8 +780,9 @@ export function syncLabel(state, pending) {
 //
 // Qt's Markdown renderer paints nothing for file:// images inside a Text in
 // the shell (found in omajop), so images are lifted into their own segments
-// and drawn by Image items. Task markers become `task:<line>` links, so a
-// click in the preview can toggle the checkbox in the source.
+// and drawn by Image items. Each text segment keeps the line where it starts,
+// so previewHtml can make its checkboxes `task:<line>` links that toggle the
+// checkbox in the source.
 
 const ATTACHMENT_IMAGE_RE = /!\[([^\]]*)\]\((attachments\/[0-9a-f]{64}\.[A-Za-z0-9]{1,8})(?:\s+"[^"]*")?\)/g
 const FENCE_LINE_RE = /^\s*(```|~~~)/
@@ -790,28 +793,22 @@ export function attachmentUrl(dataDir, relative) {
   return "file://" + encodeURI(stripTrailingSlash(String(dataDir)) + "/" + rel)
 }
 
-function linkTasks(line, index) {
-  return line.replace(/^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]\s/, function (whole, lead, mark) {
-    const box = mark === " " ? GLYPH.taskOpen : GLYPH.taskDone
-    return lead + "[" + box + "](task:" + index + ") "
-  })
-}
-
 export function splitPreview(text, dataDir) {
   const lines = String(text || "").split("\n")
   const segments = []
   let buffer = []
+  let bufferLine = 0
   let fenced = false
-  function flush() {
+  function flush(nextLine) {
     const chunk = buffer.join("\n")
-    if (chunk.trim() !== "") segments.push({ kind: "text", text: chunk })
+    if (chunk.trim() !== "") segments.push({ kind: "text", text: chunk, line: bufferLine })
     buffer = []
+    bufferLine = nextLine
   }
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
+    const line = lines[i]
     if (FENCE_LINE_RE.test(line)) fenced = !fenced
     if (fenced || FENCE_LINE_RE.test(line)) { buffer.push(line); continue }
-    line = linkTasks(line, i)
     let last = 0
     let match
     ATTACHMENT_IMAGE_RE.lastIndex = 0
@@ -824,14 +821,17 @@ export function splitPreview(text, dataDir) {
       if (url === "") { pieces += match[1]; continue }
       if (pieces.trim() !== "") buffer.push(pieces)
       pieces = ""
-      flush()
+      flush(i)
       segments.push({ kind: "image", url: url, title: match[1] })
       emitted = true
     }
     pieces += line.slice(last)
-    if (!emitted || pieces.trim() !== "") buffer.push(pieces)
+    if (!emitted || pieces.trim() !== "") {
+      if (buffer.length === 0) bufferLine = i
+      buffer.push(pieces)
+    }
   }
-  flush()
+  flush(lines.length)
   return segments
 }
 
@@ -854,301 +854,174 @@ export function taskLine(link) {
   return match ? parseInt(match[1], 10) : -1
 }
 
-// --- markdown styling (from omajop) ----------------------------------------
+// --- preview HTML ------------------------------------------------------------
 //
-// Qt's importer bakes its own blue into links and draws code in the system
-// fixed font at its own size, so both are rewritten as inline HTML carrying
-// the theme's colour and size. Raw HTML that could load something is removed.
+// The preview uses the web app's renderer (web/src/markdown.js), so the plugin
+// and the web app read markdown the same way: the title line, line breaks,
+// code, tables, checklists and #tags. Qt's rich text knows only a subset of
+// HTML and CSS and no class selectors, so the renderer's HTML gets inline
+// styles here. Raw HTML in a note is already escaped by the renderer.
 
-export function sanitizeColor(value) {
+function htmlColor(value) {
   const text = String(value || "").trim()
-  if (/^#[0-9a-fA-F]{3,8}$/.test(text)) return text
-  if (/^[a-zA-Z]{3,20}$/.test(text)) return text
-  return ""
+  return /^#[0-9a-fA-F]{3,8}$/.test(text) ? text : ""
 }
 
-export function sanitizeFontSize(value) {
+function px(value, fallback) {
   const size = Math.round(Number(value))
-  if (!isFinite(size) || size < 1 || size > 200) return ""
-  return size + "px"
+  return isFinite(size) && size >= 6 && size <= 96 ? size : fallback
 }
 
-function escapeText(value) {
-  return String(value === undefined || value === null ? "" : value)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+function quoteFamily(name) {
+  return "'" + String(name || "").replace(/['"<>;]/g, "") + "'"
 }
 
-function escapeAttribute(value) {
-  return escapeText(value).replace(/"/g, "&quot;")
-}
-
-const LINK_RE = /(^|[^!])\[([^\]]*)\]\(([^)\s]+)\)/g
-
-// A bare http(s) URL after whitespace or at a line start. Qt's own autolinking
-// (md4c) misses some URLs (e.g. with a `#…=` fragment) and ignores the theme
-// colour, so bare URLs are linked here like any other link. Trailing sentence
-// punctuation stays outside; `](url` and `<url>` are not bare.
-const BARE_URL_RE = /(^|[ \t\n])(https?:\/\/[^\s<>()\[\]"]*[^\s<>()\[\]".,;:!?'])/g
-const ANCHOR_RE = /<a\b[^>]*>[\s\S]*?<\/a>/g
-
-function escapeMarkdown(text) {
-  return String(text).replace(/[\\`*_~\[\]<>]/g, "\\$&")
-}
-
-function linkBareUrls(text, color) {
-  return text.replace(BARE_URL_RE, function (whole, prefix, url) {
-    return prefix + '<a href="' + escapeAttribute(url) + '" style="color:' + color + '">' + escapeMarkdown(url) + "</a>"
-  })
-}
-
-function styleLinksInProse(chunk, color, textColor) {
-  if (color === "") return chunk
-  const linked = chunk.replace(LINK_RE, function (whole, prefix, label, url) {
-    // Task boxes read as controls, not links: open ones in the text colour,
-    // done ones in the accent, never Qt's default link blue.
-    let style = "color:" + color
-    if (/^task:/.test(url)) style = "text-decoration:none;color:" + (label === GLYPH.taskDone ? color : textColor || color)
-    return prefix + '<a href="' + escapeAttribute(url) + '" style="' + style + '">' + label + "</a>"
-  })
-  // Bare URLs only outside the anchors just made.
-  const out = []
-  let last = 0
-  let match
-  ANCHOR_RE.lastIndex = 0
-  while ((match = ANCHOR_RE.exec(linked)) !== null) {
-    out.push(linkBareUrls(linked.slice(last, match.index), color), match[0])
-    last = match.index + match[0].length
+// The renderer's lists, parsed (they nest, so no single regex fits):
+// render(tag, attrs, items [{ attrs, body }], depth) returns each list's HTML;
+// bodies already have their nested lists rendered.
+function transformLists(html, render) {
+  const TAG_RE = /<(\/?)(ul|ol|li)\b([^>]*)>/g
+  let pos = 0
+  function next() {
+    TAG_RE.lastIndex = pos
+    return TAG_RE.exec(html)
   }
-  out.push(linkBareUrls(linked.slice(last), color))
-  return out.join("")
-}
-
-const LIST_ITEM_RE = /^\s*(?:[-*+]|\d+[.)])\s+/
-
-function addBlockSpacing(chunk) {
-  const lines = chunk.split("\n")
-  const out = []
-  let i = 0
-  while (i < lines.length) {
-    if (lines[i].trim() !== "") { out.push(lines[i]); i++; continue }
-    let end = i
-    while (end < lines.length && lines[end].trim() === "") end++
-    const before = out.length > 0 ? out[out.length - 1] : ""
-    const after = end < lines.length ? lines[end] : ""
-    const atEdge = before === "" || after === ""
-    const withinList = LIST_ITEM_RE.test(before) && LIST_ITEM_RE.test(after)
-    if (atEdge) { for (let k = i; k < end; k++) out.push(lines[k]) }
-    else if (withinList) out.push("")
-    else out.push("", "&nbsp;", "")
-    i = end
+  // Text up to the next closing tag (consumed) or the end; lists inside rendered.
+  function content(depth) {
+    let out = ""
+    for (;;) {
+      const m = next()
+      if (!m) { out += html.slice(pos); pos = html.length; return out }
+      out += html.slice(pos, m.index)
+      pos = m.index + m[0].length
+      if (m[1] === "/") return out
+      if (m[2] !== "li") out += list(m[2], m[3], depth)
+    }
   }
-  return out.join("\n")
+  function list(tag, attrs, depth) {
+    const items = []
+    for (;;) {
+      const m = next()
+      if (!m) break
+      pos = m.index + m[0].length
+      if (m[1] === "/") break
+      if (m[2] === "li") items.push({ attrs: m[3], body: content(depth + 1) })
+    }
+    return render(tag, attrs, items, depth)
+  }
+  return content(0)
 }
 
-const TABLE_DELIMITER_RE = /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*\|?\s*$/
-const CELL_LINK_RE = /\[([^\]]*)\]\(([^)\s]+)\)/g
-const CELL_CODE_RE = /`[^`\n]+`/g
+// options: { startLine, title, textColor, mutedColor, linkColor, background,
+//   codeBackground, borderColor, fontSizePx, monoFamily }. Checkboxes become `task:<line>`
+// links (line numbers in the whole note, from startLine).
+export function previewHtml(markdown, options) {
+  const o = options || {}
+  const source = String(markdown === undefined || markdown === null ? "" : markdown)
+  const text = htmlColor(o.textColor) || "#dddddd"
+  const muted = htmlColor(o.mutedColor) || text
+  const link = htmlColor(o.linkColor) || text
+  const codeBg = htmlColor(o.codeBackground) || "#222222"
+  const pageBg = htmlColor(o.background) || "#000000"
+  const border = htmlColor(o.borderColor) || muted
+  const size = px(o.fontSizePx, 14)
+  const mono = quoteFamily(o.monoFamily || "monospace")
+  const startLine = Math.max(0, Math.floor(Number(o.startLine) || 0))
+  const gap = Math.round(size * 0.7)
+  // Qt ignores margins on tables. An empty paragraph after a code box, table,
+  // quote or rule keeps the gap; a 1 px one before it keeps the margin of the
+  // paragraph above (Qt drops a paragraph's margin right before a table).
+  const spacer = '<p style="margin-top:0;margin-bottom:0;font-size:' + Math.max(4, Math.round(gap * 0.8)) + 'px">&nbsp;</p>'
+  const lead = '<p style="margin-top:0;margin-bottom:0;font-size:1px">&nbsp;</p>'
 
-function splitRow(line) {
-  let text = line.trim()
-  if (text.charAt(0) === "|") text = text.slice(1)
-  if (text.charAt(text.length - 1) === "|") text = text.slice(0, -1)
-  return text.split("|").map(function (c) { return c.trim() })
-}
+  let html = renderMarkdown(source, { title: o.title === true, resolveAttachment: function (name) { return "attachments/" + name } })
 
-function alignmentOf(spec) {
-  const text = String(spec || "").trim()
-  const left = text.charAt(0) === ":"
-  const right = text.charAt(text.length - 1) === ":"
-  if (left && right) return "center"
-  if (right) return "right"
-  if (left) return "left"
-  return ""
-}
-
-function renderCellProse(text, color) {
-  let out = escapeText(text)
-  if (color !== "") {
-    out = out.replace(CELL_LINK_RE, function (whole, label, url) {
-      return '<a href="' + url + '" style="color:' + color + '">' + label + "</a>"
+  // Checkboxes: a glyph link that asks the owner to toggle that line.
+  html = html.replace(/<input type="checkbox" class="task" data-off="(\d+)"( checked)?> ?/g, function (whole, off, checked) {
+    const line = startLine + source.slice(0, Number(off)).split("\n").length - 1
+    const glyph = checked ? GLYPH.taskDone : GLYPH.taskOpen
+    return '<a href="task:' + line + '" style="text-decoration:none;color:' + (checked ? link : text)
+      + '"><span style="font-family:' + mono + '">' + glyph + "</span></a>&nbsp;&nbsp;"
+  })
+  html = html.replace(/<li class="task-item done">/g, '<li style="color:' + muted + '">')
+  html = html.replace(/<li class="task-item">/g, "<li>")
+  html = transformLists(html, function (tag, attrs, items, depth) {
+    const box = /^(<a href="task:[^"]*"[^>]*><span[^>]*>[^<]*<\/span><\/a>)(?:&nbsp;)*\s*/
+    const tasks = tag === "ul" && items.some(function (item) { return box.test(item.body) })
+    if (!tasks) {
+      return "<" + tag + attrs + ">" + items.map(function (item) { return "<li" + item.attrs + ">" + item.body + "</li>" }).join("") + "</" + tag + ">"
+    }
+    // Qt draws a bullet whatever list-style-type says: a checklist becomes a
+    // table, checkbox | text. Wrapped lines and nested lists (in the text
+    // cell) then indent under the text.
+    const rows = items.map(function (item) {
+      const m = box.exec(item.body)
+      const body = (m ? item.body.slice(m[0].length) : item.body).replace(/^<p>([\s\S]*?)<\/p>/, "$1")
+      return '<tr><td valign="top" width="' + Math.round(size * 1.7) + '">' + (m ? m[1] : "&bull;") + "</td><td" + item.attrs + ">"
+        + body + "</td></tr>"
     })
-  }
-  out = out.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-  out = out.replace(/__([^_]+)__/g, "<b>$1</b>")
-  out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>")
-  out = out.replace(/~~([^~]+)~~/g, "<s>$1</s>")
-  return out
-}
-
-function codeSpan(text, size) {
-  return '<code style="font-size:' + size + '">' + escapeText(text) + "</code>"
-}
-
-function renderCell(text, color, size) {
-  const parts = []
-  let last = 0
-  let match
-  CELL_CODE_RE.lastIndex = 0
-  while ((match = CELL_CODE_RE.exec(text)) !== null) {
-    parts.push(renderCellProse(text.slice(last, match.index), color))
-    const code = match[0].slice(1, -1)
-    parts.push(size !== "" ? codeSpan(code, size) : escapeText(code))
-    last = match.index + match[0].length
-  }
-  parts.push(renderCellProse(text.slice(last), color))
-  return parts.join("")
-}
-
-function renderTable(header, alignments, rows, options) {
-  const parts = ['<table border="1" bordercolor="' + options.border + '" cellpadding="4" cellspacing="0">']
-  function cells(values, tag) {
-    let row = "<tr>"
-    for (let i = 0; i < values.length; i++) {
-      const align = alignments[i] || ""
-      row += "<" + tag + (align !== "" ? ' align="' + align + '"' : "") + ">"
-        + renderCell(values[i], options.color, options.size) + "</" + tag + ">"
-    }
-    return row + "</tr>"
-  }
-  parts.push(cells(header, "th"))
-  for (let i = 0; i < rows.length; i++) parts.push(cells(rows[i], "td"))
-  parts.push("</table>")
-  return parts.join("")
-}
-
-function convertTables(chunk, options) {
-  if (options.border === "") return chunk
-  const lines = chunk.split("\n")
-  const out = []
-  let i = 0
-  while (i < lines.length) {
-    const isTableStart = i + 1 < lines.length && lines[i].indexOf("|") !== -1
-      && TABLE_DELIMITER_RE.test(lines[i + 1])
-    if (!isTableStart) { out.push(lines[i]); i++; continue }
-    const header = splitRow(lines[i])
-    const alignments = splitRow(lines[i + 1]).map(alignmentOf)
-    const rows = []
-    let end = i + 2
-    while (end < lines.length && lines[end].trim() !== "" && lines[end].indexOf("|") !== -1) {
-      rows.push(splitRow(lines[end]))
-      end++
-    }
-    out.push(renderTable(header, alignments, rows, options))
-    i = end
-  }
-  return out.join("\n")
-}
-
-const HTML_DROP_WITH_CONTENT = [
-  "script", "style", "iframe", "object", "embed", "video", "audio", "canvas",
-  "svg", "math", "template", "noscript", "applet", "frame", "frameset", "head",
-  "form", "map", "portal"
-]
-const HTML_IMG_RE = /<img\b([^>]*)>/gi
-const HTML_TAG_RE = /<(\/?)([A-Za-z][A-Za-z0-9]*)\b([^>]*)>/g
-const ALT_RE = /\balt\s*=\s*["']([^"']*)["']/i
-const LOADING_ATTRIBUTE_RE =
-  /\s(?:on[a-z]+|src|srcset|data|poster|background|formaction|xlink:href|lowsrc|dynsrc)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
-const STYLE_ATTRIBUTE_RE = /(\sstyle\s*=\s*)("([^"]*)"|'([^']*)')/gi
-
-function sanitizeStyleDeclarations(value) {
-  const parts = String(value === undefined || value === null ? "" : value).split(";")
-  const kept = []
-  for (let i = 0; i < parts.length; i++) {
-    const declaration = parts[i].trim()
-    if (declaration === "") continue
-    if (/url\s*\(/i.test(declaration) || /expression\s*\(/i.test(declaration)) continue
-    if (/[<>"']/.test(declaration)) continue
-    kept.push(declaration)
-  }
-  return kept.join(";")
-}
-
-function stripLoadingAttributes(rawAttributes) {
-  let out = String(rawAttributes === undefined || rawAttributes === null ? "" : rawAttributes)
-  out = out.replace(LOADING_ATTRIBUTE_RE, "")
-  out = out.replace(STYLE_ATTRIBUTE_RE, function (whole, lead, quoted, double, single) {
-    const value = double !== undefined ? double : (single !== undefined ? single : "")
-    const cleaned = sanitizeStyleDeclarations(value)
-    return cleaned === "" ? "" : lead + '"' + escapeAttribute(cleaned) + '"'
+    const table = '<table cellspacing="0" cellpadding="1">' + rows.join("") + "</table>"
+    return depth === 0 ? lead + table + spacer : table
   })
-  return out
-}
 
-// Removes what would make the preview fetch something (an <img src=http…>
-// is loaded by Qt during layout, without a click).
-export function neutralizeEmbeds(text) {
-  let out = String(text === undefined || text === null ? "" : text)
-  for (let i = 0; i < HTML_DROP_WITH_CONTENT.length; i++) {
-    const tag = HTML_DROP_WITH_CONTENT[i]
-    out = out.replace(new RegExp("<" + tag + "\\b[\\s\\S]*?<\\/" + tag + "\\s*>", "gi"), "")
-    out = out.replace(new RegExp("<\\/?" + tag + "\\b[^>]*>", "gi"), "")
-  }
-  out = out.replace(HTML_IMG_RE, function (whole, attributes) {
-    const alt = ALT_RE.exec(attributes)
-    return alt && alt[1] ? escapeText(alt[1]) : ""
+  // Remote images are not fetched: they become links. (Attachments are
+  // lifted out by splitPreview before this.)
+  html = html.replace(/<img src="([^"]*)" alt="([^"]*)"[^>]*>/g, function (whole, src, alt) {
+    return '<a href="' + src + '">' + (alt || "image") + "</a>"
   })
-  out = out.replace(HTML_TAG_RE, function (whole, closing, rawName, rawAttributes) {
-    if (closing === "/") return whole
-    return "<" + rawName + stripLoadingAttributes(rawAttributes) + ">"
+
+  html = html.replace(/<a href="([^"]*)"[^>]*>/g, function (whole, href) {
+    if (/^task:/.test(href)) return whole
+    return '<a href="' + href + '" style="color:' + link + '">'
   })
-  // Remote markdown images load the same way; keep their alt text as a link.
-  out = out.replace(/!\[([^\]]*)\]\(((?:https?:)?\/\/[^)\s]+)[^)]*\)/g, "[$1]($2)")
-  return out
-}
 
-const INLINE_CODE_RE = /`[^`\n]+`/g
-const FENCE_RE = /(```[^\n]*\n[\s\S]*?^```|~~~[^\n]*\n[\s\S]*?^~~~)/gm
+  // Code blocks: a tinted box. Inline code: the mono font on a tint.
+  html = html.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g, function (whole, code) {
+    return lead + '<table width="100%" cellspacing="0" cellpadding="' + Math.round(size * 0.7) + '" bgcolor="' + codeBg + '"><tr><td style="white-space:pre;font-family:' + mono + ";font-size:" + Math.round(size * 0.9)
+      + 'px">' + code.replace(/\n$/, "") + "</td></tr></table>" + spacer
+  })
+  html = html.replace(/<code>/g, '<code style="font-family:' + mono + ";font-size:" + Math.round(size * 0.9)
+    + "px;background-color:" + codeBg + '">&#8202;')
+  html = html.replace(/<\/code>/g, "&#8202;</code>")
 
-function styleInline(chunk, options) {
-  const parts = []
-  let last = 0
-  let match
-  INLINE_CODE_RE.lastIndex = 0
-  while ((match = INLINE_CODE_RE.exec(chunk)) !== null) {
-    parts.push(styleLinksInProse(neutralizeEmbeds(chunk.slice(last, match.index)), options.color, options.text))
-    parts.push(options.size !== "" ? codeSpan(match[0].slice(1, -1), options.size) : match[0])
-    last = match.index + match[0].length
-  }
-  parts.push(styleLinksInProse(neutralizeEmbeds(chunk.slice(last)), options.color, options.text))
-  return parts.join("")
-}
+  html = html.replace(/<span class="tag">/g, '<span style="color:' + link + ";background-color:" + codeBg + '">')
+  html = html.replace(/<del>/g, '<s style="color:' + muted + '">').replace(/<\/del>/g, "</s>")
 
-function styleProse(chunk, options) {
-  return addBlockSpacing(styleInline(convertTables(chunk, options), options))
-}
+  // Quotes: an accent bar on the left, muted text. Qt draws a table's margin
+  // inside its background, so no margins on tables; paragraphs in a quote get
+  // none either, or the bar would not line up with the text.
+  html = html.replace(/<blockquote>[\s\S]*?<\/blockquote>/g, function (quote) {
+    return quote.replace(/<p>/g, '<p style="margin-top:0;margin-bottom:0">')
+  })
+  // Qt stretches no cell background to the row height, so the bar is an
+  // accent table around a page-coloured one, 3 px apart on the left.
+  html = html.replace(/<blockquote>/g, lead + '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="' + link
+    + '"><tr><td style="padding-left:3px"><table width="100%" cellspacing="0" cellpadding="0" bgcolor="' + pageBg
+    + '"><tr><td style="padding-left:' + Math.round(size * 0.8) + "px;color:" + muted + '">')
+  html = html.replace(/<\/blockquote>/g, "</td></tr></table></td></tr></table>" + spacer)
 
-function styleFence(block, size) {
-  const lines = block.split("\n")
-  lines.shift()
-  if (lines.length > 0 && /^\s*(```|~~~)\s*$/.test(lines[lines.length - 1])) lines.pop()
-  if (lines.length === 0) return ""
-  const rendered = []
-  for (let i = 0; i < lines.length; i++) {
-    rendered.push(lines[i].trim() === "" ? ">" : "> " + codeSpan(lines[i], size))
-  }
-  return "\n\n" + rendered.join("  \n") + "\n\n"
-}
+  // The rule: a 2 px line in the muted colour, like the web app.
+  html = html.replace(/<hr>/g, lead + '<table width="100%" cellspacing="0" cellpadding="0"><tr><td style="font-size:1px" height="2" bgcolor="'
+    + muted + '"></td></tr></table>' + spacer)
 
-export function styleMarkdown(markdown, options) {
-  const text = String(markdown === undefined || markdown === null ? "" : markdown)
-  const settings = options || {}
-  const size = sanitizeFontSize(settings.fontSizePx)
-  const styling = {
-    color: sanitizeColor(settings.linkColor),
-    text: sanitizeColor(settings.textColor),
-    size: size,
-    border: sanitizeColor(settings.tableBorderColor)
-  }
-  const out = []
-  let last = 0
-  let match
-  FENCE_RE.lastIndex = 0
-  while ((match = FENCE_RE.exec(text)) !== null) {
-    out.push(styleProse(text.slice(last, match.index), styling))
-    out.push(size === "" ? match[0] : styleFence(match[0], size))
-    last = match.index + match[0].length
-  }
-  out.push(styleProse(text.slice(last), styling))
-  return out.join("")
+  html = html.replace(/<table><thead>([\s\S]*?)<\/tbody><\/table>/g, function (whole, body) {
+    return lead + '<table border="1" cellspacing="0" cellpadding="' + Math.round(size * 0.4) + '" style="border-collapse:collapse;border-color:'
+      + border + '"><thead>' + body + "</tbody></table>" + spacer
+  })
+  html = html.replace(/<th>|<th style="/g, function (m) { return m === "<th>" ? '<th align="left">' : '<th align="left" style="' })
+
+  const heading = { 1: 1.6, 2: 1.35, 3: 1.15, 4: 1.05, 5: 1, 6: 1 }
+  html = html.replace(/<h([1-6])>/g, function (whole, level) {
+    return "<h" + level + ' style="font-size:' + Math.round(size * heading[level]) + "px;font-weight:700;margin-top:"
+      + Math.round(size * 1.1) + "px;margin-bottom:" + Math.round(size * 0.4) + 'px">'
+  })
+  html = html.replace(/<p class="title">/g, '<p style="font-size:' + Math.round(size * 1.55)
+    + 'px;font-weight:700;margin-top:0;margin-bottom:' + Math.round(size * 0.35) + 'px">')
+  html = html.replace(/<p>/g, '<p style="margin-top:0;margin-bottom:' + gap + "px;line-height:" + Math.round(size * 1.45) + 'px">')
+  html = html.replace(/<(ul|ol)( start="\d+")?>/g, '<$1$2 style="margin-top:0;margin-bottom:' + gap + 'px">')
+
+  // No spacers at the edges of a segment.
+  if (html.indexOf(lead) === 0) html = html.slice(lead.length)
+  if (html.slice(-spacer.length) === spacer) html = html.slice(0, -spacer.length)
+  return '<div style="color:' + text + ";font-size:" + size + 'px">' + html + "</div>"
 }

@@ -328,12 +328,13 @@ test("formatting", () => {
 
 const sha = "a".repeat(64)
 
-test("splitPreview lifts attachment images and links tasks", () => {
+test("splitPreview lifts attachment images and keeps each text segment's first line", () => {
   const text = "# T\n- [ ] todo\ntext ![shot](attachments/" + sha + ".png) after\n```\n- [ ] in code\n```"
   const segments = M.splitPreview(text, "/data")
   assert.equal(segments.length, 3)
-  assert.ok(segments[0].text.includes("[" + M.GLYPH.taskOpen + "](task:1) todo"))
+  assert.deepEqual(segments[0], { kind: "text", text: "# T\n- [ ] todo\ntext ", line: 0 })
   assert.deepEqual(segments[1], { kind: "image", url: "file:///data/attachments/" + sha + ".png", title: "shot" })
+  assert.equal(segments[2].line, 2)
   assert.match(segments[2].text, /after/)
   assert.match(segments[2].text, /- \[ \] in code/)
 })
@@ -352,13 +353,48 @@ test("links and tasks from the preview", () => {
   assert.equal(M.taskLine("task:x"), -1)
 })
 
-test("styleMarkdown themes links, keeps task links neutral, drops remote embeds", () => {
-  const out = M.styleMarkdown("[a](https://x.example) [☐](task:3) ![r](https://evil.example/p.png) <img src=x alt=y>",
-    { linkColor: "#ff0000", fontSizePx: 13, tableBorderColor: "#333333" })
+const look = { textColor: "#eeeeee", mutedColor: "#888888", linkColor: "#ff0000", codeBackground: "#222222",
+  borderColor: "#333333", fontSizePx: 14, monoFamily: "JetBrainsMono Nerd Font" }
+
+test("previewHtml: the web renderer, themed for Qt", () => {
+  const out = M.previewHtml("Title\n\nline one\nline two #tag [a](https://x.example) `~/.zshrc` and `~/.bashrc`",
+    Object.assign({ title: true }, look))
+  assert.match(out, /<p style="font-size:\d+px;font-weight:700[^"]*">Title<\/p>/)
+  assert.match(out, /line one<br>line two/)
   assert.match(out, /<a href="https:\/\/x.example" style="color:#ff0000">a<\/a>/)
-  assert.match(out, /<a href="task:3" style="text-decoration:none;color:#[0-9a-fA-F]+">☐<\/a>/)
-  assert.doesNotMatch(out, /!\[/)
+  assert.match(out, /<span style="color:#ff0000;background-color:#222222">#tag<\/span>/)
+  // Inline code keeps its tildes: no strikethrough between two code spans.
+  assert.doesNotMatch(out, /<s[ >]|<del>/)
+  assert.match(out, /font-family:'JetBrainsMono Nerd Font'[^>]*>&#8202;~\/\.zshrc&#8202;<\/code>/)
+})
+
+test("previewHtml: code blocks, tables, quotes and rules get Qt markup", () => {
+  const out = M.previewHtml("T\n\n```\nmkdir x\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n> q\n\n---", look)
+  assert.match(out, /<table width="100%"[^>]*bgcolor="#222222"><tr><td style="white-space:pre;font-family:'JetBrainsMono Nerd Font'[^"]*">mkdir x<\/td>/)
+  assert.match(out, /<table border="1"[^>]*border-color:#333333[^>]*><thead><tr><th align="left">a<\/th><th align="left">b<\/th>/)
+  assert.match(out, /bgcolor="#ff0000"><tr><td style="padding-left:3px"><table [^>]*><tr><td style="[^"]*color:#888888">/)
+  assert.match(out, /<td style="font-size:1px" height="2" bgcolor="#888888"><\/td>/)
+})
+
+test("previewHtml: checkboxes are task links for their line in the whole note", () => {
+  const out = M.previewHtml("- [ ] open\n- [x] done", Object.assign({ startLine: 5 }, look))
+  // Qt bullets every <ul>: a checklist is a table, checkbox | text.
+  assert.doesNotMatch(out, /<ul/)
+  assert.match(out, new RegExp('<tr><td valign="top"[^>]*><a href="task:5" style="text-decoration:none;color:#eeeeee"><span[^>]*>' + M.GLYPH.taskOpen + "</span></a></td><td>open</td></tr>"))
+  assert.match(out, new RegExp('<a href="task:6" style="text-decoration:none;color:#ff0000"><span[^>]*>' + M.GLYPH.taskDone + '</span></a></td><td style="color:#888888">done</td>'))
+})
+
+test("previewHtml: bare URLs with fragments are one link", () => {
+  const out = M.previewHtml("https://b.example/v/ek2aqM#dmVwPVZp=\n\nsee https://c.example/p_q_r.", look)
+  assert.match(out, /<a href="https:\/\/b\.example\/v\/ek2aqM#dmVwPVZp=" style="color:#ff0000">/)
+  assert.match(out, /<a href="https:\/\/c\.example\/p_q_r" style="color:#ff0000">https:\/\/c\.example\/p_q_r<\/a>\./)
+})
+
+test("previewHtml: no remote fetches, no raw HTML", () => {
+  const out = M.previewHtml("![r](https://evil.example/p.png) <img src=x alt=y> <script>x</script>", look)
   assert.doesNotMatch(out, /<img/)
+  assert.doesNotMatch(out, /<script/)
+  assert.match(out, /<a href="https:\/\/evil.example\/p.png" style="color:#ff0000">r<\/a>/)
 })
 
 // --- manifest ---------------------------------------------------------------
@@ -373,29 +409,3 @@ test("manifest defaults survive the model's normalisation", () => {
   for (const entry of manifest.barWidget.schema) assert.ok(entry.key in defaults, entry.key)
 })
 
-// --- bare URLs in the preview ----------------------------------------------------
-
-test("bare URLs become themed links, including ones md4c misses", () => {
-  const style = { linkColor: "#ff0000", fontSizePx: 13, tableBorderColor: "#333333" }
-  const text = "https://a.example/x/ee02-06\n\nhttps://b.example/v/ek2aqM#dmVwPVZp=\n\nsee https://c.example/p_q_r."
-  const out = M.styleMarkdown(text, style)
-  assert.match(out, /<a href="https:\/\/a\.example\/x\/ee02-06" style="color:#ff0000">/)
-  assert.match(out, /<a href="https:\/\/b\.example\/v\/ek2aqM#dmVwPVZp=" style="color:#ff0000">/)
-  // Trailing punctuation stays outside; underscores cannot turn into emphasis.
-  assert.match(out, /href="https:\/\/c\.example\/p_q_r" style="color:#ff0000">https:\/\/c\.example\/p\\_q\\_r<\/a>\./)
-})
-
-test("URLs that are already links or autolinks are not linked twice", () => {
-  const style = { linkColor: "#ff0000", fontSizePx: 13, tableBorderColor: "#333333" }
-  const out = M.styleMarkdown("[site](https://a.example/) and [https://b.example/](https://b.example/) <https://c.example/>", style)
-  assert.equal((out.match(/<a /g) || []).length, 2)
-  assert.equal((out.match(/href="https:\/\/b\.example\/"/g) || []).length, 1)
-  assert.match(out, /<https:\/\/c\.example\/>/)
-})
-
-test("task boxes use the theme's text and accent colours, not link blue", () => {
-  const style = { linkColor: "#ff0000", textColor: "#eeeeee", fontSizePx: 13, tableBorderColor: "#333333" }
-  const out = M.styleMarkdown(M.splitPreview("- [ ] open\n- [x] done", "/d")[0].text, style)
-  assert.match(out, new RegExp('style="text-decoration:none;color:#eeeeee">' + M.GLYPH.taskOpen + "</a>"))
-  assert.match(out, new RegExp('style="text-decoration:none;color:#ff0000">' + M.GLYPH.taskDone + "</a>"))
-})

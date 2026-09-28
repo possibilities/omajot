@@ -46,7 +46,17 @@ function safeUrl(url, resolve) {
 // `(url "title")`; the url may contain one level of balanced parentheses.
 const TARGET = '\\(\\s*<?((?:[^()\\s>]|\\([^()\\s]*\\))+)>?(?:\\s+"([^"]*)")?\\s*\\)'
 
-const TAG = /(^|[\s(])#([\p{L}\p{N}_\-/]*[\p{L}_][\p{L}\p{N}_\-/]*)/gu
+// The Omarchy plugin runs this file in Qt's JS engine (V4), which compiles
+// \p{…} escapes but never matches them, and has no regex lookbehind. There
+// the tag letters fall back to explicit ranges (the same as Model.mjs).
+const UNICODE_CLASSES = (() => {
+  try { return new RegExp('^\\p{L}$', 'u').test('é') } catch (e) { return false }
+})()
+const LETTER = UNICODE_CLASSES ? '\\p{L}' : 'A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F\\u0370-\\u03FF'
+  + '\\u0400-\\u04FF\\u0590-\\u05FF\\u0600-\\u06FF\\u0900-\\u097F\\u3040-\\u30FF\\u4E00-\\u9FFF\\uAC00-\\uD7AF'
+const DIGIT = UNICODE_CLASSES ? '\\p{N}' : '0-9'
+const TAG = new RegExp('(^|[\\s(])#([' + LETTER + DIGIT + '_\\-/]*[' + LETTER + '_][' + LETTER + DIGIT + '_\\-/]*)',
+  UNICODE_CLASSES ? 'gu' : 'g')
 
 export function renderInline(text, opts = {}) {
   const resolve = opts.resolveAttachment || defaultResolve
@@ -99,7 +109,7 @@ const SETEXT = /^ {0,3}(=+|-+)[ \t]*$/
 const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
 
 function indentOf(text) {
-  return text.length - text.trimStart().length
+  return /^\s*/.exec(text)[0].length
 }
 
 function isBlank(line) {
@@ -116,7 +126,14 @@ function splitRow(text) {
   let t = text.trim()
   if (t.startsWith('|')) t = t.slice(1)
   if (t.endsWith('|') && !t.endsWith('\\|')) t = t.slice(0, -1)
-  return t.split(/(?<!\\)\|/).map(c => c.trim())
+  // Split at pipes that are not escaped (no lookbehind: see TAG).
+  const cells = []
+  let cell = ''
+  for (let k = 0; k < t.length; k++) {
+    if (t[k] === '|' && t[k - 1] !== '\\') { cells.push(cell); cell = '' } else cell += t[k]
+  }
+  cells.push(cell)
+  return cells.map(c => c.trim())
 }
 
 // lines: [{ text, off }] where off is the UTF-16 source offset of text[0].
