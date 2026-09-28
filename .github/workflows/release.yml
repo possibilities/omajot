@@ -54,11 +54,26 @@ jobs:
           set -eu
           mkdir -p release-dist
           # zig target → release platform name (tools/install-release.sh)
-          for pair in x86_64-linux-musl:x86_64-linux aarch64-linux-musl:aarch64-linux \
-                      aarch64-macos:aarch64-macos x86_64-macos:x86_64-macos \
-                      x86_64-windows-gnu:x86_64-windows; do
+          pairs="x86_64-linux-musl:x86_64-linux aarch64-linux-musl:aarch64-linux
+                 aarch64-macos:aarch64-macos x86_64-macos:x86_64-macos
+                 x86_64-windows-gnu:x86_64-windows"
+          # All five at once: each LLVM build mostly uses one core (5+ minutes
+          # one after the other). Zig's cache is safe for parallel builds.
+          pids=""
+          for pair in $pairs; do
             target=${pair%%:*} platform=${pair##*:}
-            zig build -Dtarget="$target" -Doptimize=ReleaseSafe -Dstrip=true --prefix "out/$platform"
+            zig build -Dtarget="$target" -Doptimize=ReleaseSafe -Dstrip=true --prefix "out/$platform" \
+              > "build-$platform.log" 2>&1 &
+            pids="$pids $!:$platform"
+          done
+          failed=""
+          for entry in $pids; do
+            wait "${entry%%:*}" || failed="$failed ${entry##*:}"
+          done
+          for platform in $failed; do echo "::error::build failed: $platform"; cat "build-$platform.log"; done
+          [ -z "$failed" ]
+          for pair in $pairs; do
+            platform=${pair##*:}
             ext=""; [ "$platform" = x86_64-windows ] && ext=.exe
             cp "out/$platform/bin/omajot$ext" "release-dist/omajot-$platform$ext"
           done
