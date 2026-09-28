@@ -21,7 +21,8 @@ terminal. Your own small Zig hub syncs all devices over
 
 - **Markdown first.** Write plain markdown. The preview shows headings, tables,
   code, quotes, links and images. The first line of a note is its title.
-- **Checklists.** Write `- [ ]`. Click the box in the preview to tick it.
+- **Checklists.** Write `- [ ]`, and indent to nest. Click the box in the preview
+  to tick it: in the web app, the plugin and the TUI.
 - **Inline tags.** Write `#garden` anywhere. omajot lists your tags next to your folders.
 - **Folders, pins and a Trash.** Nested folders. Pinned notes show first.
 - **Paste anything.** Screenshots, files, web pages and LibreOffice text. Images
@@ -57,27 +58,35 @@ prints, then tap *Share* → *Add to Home Screen*.
 The Omarchy plugin puts a note icon in the bar. Click it for a dropdown;
 middle-click it for the main window. Both have three columns and full keyboard
 control: <kbd>n</kbd> new note, <kbd>/</kbd> search, <kbd>j</kbd> <kbd>k</kbd>
-move, <kbd>e</kbd> editor or preview.
+move, <kbd>e</kbd> editor or preview. Buttons next to the omajot name open the
+terminal UI or the web app in a window of their own, or the QR code for your
+phone.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/assets/shots/plugin-window-dark.webp">
-  <img alt="The omajot main window on Omarchy: folders and tags, the note list, and a note with a picture, a table and a checklist" src="site/assets/shots/plugin-window-light.webp">
-</picture>
+<p>
+  <img alt="The omajot main window on Omarchy: the Travel folder and the Lisbon note with a picture, a table and a checklist, source and preview" src="site/assets/shots/plugin-window-dark.webp" width="49%">
+  <img alt="The omajot main window on Omarchy: a packing list with nested checklist items, source and preview" src="site/assets/shots/plugin-tasks-dark.webp" width="49%">
+</p>
 
 ### In the terminal
 
 `omajot tui` shows the same three columns in any terminal. Changes from your
 other devices show up while you read. Press <kbd>e</kbd> to edit the note in
-your `$EDITOR`, for example Neovim: each save goes into the note at once.
-Pictures show in terminals with the Kitty graphics protocol (Ghostty, Kitty,
-WezTerm). The colours come from your Omarchy theme.
+your `$EDITOR`, for example Neovim: each save goes into the note at once. The
+mouse works too: click to select, tick a checkbox or open a link, and click a
+note twice to edit it. Pictures show in terminals with the Kitty graphics
+protocol (Ghostty, Kitty, WezTerm). The colours come from your Omarchy theme.
 
+<p>
+  <img alt="omajot tui with the Tokyo Night theme: the Travel folder and a packing list with nested checklist items, a link and a quote" src="site/assets/shots/tui-tasks-dark.webp" width="49%">
+  <img alt="The same packing list in omajot tui with the Catppuccin Latte theme" src="site/assets/shots/tui-tasks-light.webp" width="49%">
+</p>
 <p>
   <img alt="omajot tui in Ghostty with the Tokyo Night theme: folders and tags, the note list, and a note with a picture, a table and a checklist" src="site/assets/shots/tui-dark.webp" width="49%">
   <img alt="omajot tui in Ghostty with the Catppuccin Latte theme: the same notes in light colours" src="site/assets/shots/tui-light.webp" width="49%">
 </p>
 
-*`omajot tui` in Ghostty with two Omarchy themes: Tokyo Night and Catppuccin Latte.*
+*`omajot tui` with two Omarchy themes, Tokyo Night and Catppuccin Latte: nested
+checklists, and a picture in Ghostty.*
 
 ### On the command line
 

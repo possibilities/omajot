@@ -108,6 +108,10 @@ for (const theme of ['light', 'dark']) {
   await shot(d.page, `desktop-note-${theme}`)
   await mode(d.page, 'split', '.p-editor .actions [data-act="mode"]')
   await shot(d.page, `desktop-split-${theme}`)
+  // Nested checklists, a link and a quote, source and preview side by side.
+  await openNote(d.page, 'Packing list')
+  await shot(d.page, `desktop-tasks-${theme}`)
+  await openNote(d.page, 'Lisbon in October')
 
 
   await d.page.click('.p-folders [data-act="phone"]')

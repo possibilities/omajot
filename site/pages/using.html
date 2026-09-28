@@ -17,6 +17,7 @@
     <li><strong>Notes:</strong> the notes of the selected source, newest first. Type in the search field to filter them.</li>
     <li><strong>Editor:</strong> the selected note, as markdown source, as preview, or both side by side.</li>
   </ul>
+  <p>The sync state is at the bottom of the sources column: a dot and a word, for example <em>Synced</em>.</p>
   <figure class="shot">{{shot:plugin-dropdown:The dropdown under the note icon in the Omarchy bar}}<figcaption>The dropdown, under the note icon in the bar</figcaption></figure>
   <figure class="shot">{{shot:plugin-window:The main window with folders, tags, the note list and a note with a picture, a table and a checklist}}<figcaption>The main window, split layout</figcaption></figure>
   <p>Next to the omajot name are four buttons. The window button (in the dropdown) opens the selected note in the main window; <kbd>o</kbd> does the same. The terminal button opens <code>omajot tui</code> in your terminal, and the globe button opens the web app in its own window. Both windows open popped out like <kbd>Super</kbd>+<kbd>O</kbd>: floating, centred and pinned; if the window is open already, the button brings it to the front. The phone button shows your hub URL as a QR code.</p>
@@ -86,10 +87,12 @@
   <h2>Titles, checklists and tags</h2>
   <ul>
     <li><strong>Title:</strong> the first line of a note is its title. A <code>#</code> heading mark is not part of the title.</li>
-    <li><strong>Checklist:</strong> write <code>- [ ] task</code>. Click the box in the preview to tick it. omajot changes the source for you.</li>
+    <li><strong>Checklist:</strong> write <code>- [ ] task</code>. Click the box in the preview to tick it. omajot changes the source for you. Indent an item by four spaces to put it under the item above it.</li>
     <li><strong>Tags:</strong> write <code>#word</code> anywhere in the text. A tag starts after a space or at the start of a line. Headings (<code># Title</code>), code and numbers such as <code>#123</code> are not tags. Tags are not case-sensitive.</li>
   </ul>
   <p>Click a tag in the sources column to show all notes with that tag.</p>
+  <figure class="shot">{{shot:desktop-tasks:A packing list with nested checklist items, a link and a quote: source and preview in the web app}}<figcaption>A checklist with nested items in the web app: source and preview side by side</figcaption></figure>
+  <figure class="shot">{{shot:plugin-tasks:The same packing list in the Omarchy main window}}<figcaption>The same note in the Omarchy main window</figcaption></figure>
 </section>
 
 <section id="folders">
@@ -120,7 +123,8 @@
   <h2>Sync and offline</h2>
   <p>Every device keeps a full copy of your notes. You can read, write and search without a network. omajot sends your changes when the hub is reachable again.</p>
   <p>If you change the same note on two devices, omajot merges both changes. There are no conflict copies.</p>
-  <p>The plugin shows the sync state next to the omajot name, for example <em>Synced</em> or <em>Offline · 3 unsent</em>. The web app shows it at the bottom of the folders column, for example <em>Up to date</em>.</p>
+  <p>The plugin and the web app show the sync state at the bottom of the folders column, for example <em>Synced</em>, <em>Up to date</em> or <em>Offline · 3 unsent</em>. The TUI shows it in its status bar.</p>
+  <p><strong>Updates.</strong> The hub serves the web app. After you update the hub, the web app changes to the new version by itself when you open it. If it is open already, a notice asks you to reload.</p>
 </section>
 
 <section id="webapp">
@@ -138,8 +142,9 @@
 
 <section id="terminal">
   <h2>The terminal UI</h2>
-  <p>Run <code>omajot tui</code> in a terminal. It shows the folders and tags, the notes and the note, like the main window. Move with <code>j</code> <code>k</code> <code>h</code> <code>l</code> or the arrow keys, search with <code>/</code>, and press <code>e</code> to edit the note in <code>$EDITOR</code> (for example Neovim). Each save goes into the note at once, and changes from your other devices show up while you read. The mouse works too: click to select, click a checkbox to tick it, and click a note twice to edit it. Press <code>?</code> for all keys. The <a href="cli.html#tui">CLI reference</a> has the details.</p>
-  <figure class="shot">{{shot:tui:omajot tui in Ghostty: folders and tags, the note list, and a note with a picture, a table and a checklist}}<figcaption>omajot tui in Ghostty. The picture uses the Kitty graphics protocol; the colours come from the Omarchy theme.</figcaption></figure>
+  <p>Run <code>omajot tui</code> in a terminal. It shows the folders and tags, the notes and the note, like the main window. Move with <code>j</code> <code>k</code> <code>h</code> <code>l</code> or the arrow keys, search with <code>/</code>, and press <code>e</code> to edit the note in <code>$EDITOR</code> (for example Neovim). Each save goes into the note at once, and changes from your other devices show up while you read. The mouse works too: click to select, click a checkbox to tick it, click a link to open it, and click a note twice to edit it. Press <code>?</code> for all keys. The <a href="cli.html#tui">CLI reference</a> has the details.</p>
+  <figure class="shot">{{shot:tui-tasks:omajot tui with the Travel folder and a packing list with nested checklist items, a link and a quote}}<figcaption>A checklist with nested items, a link and a quote</figcaption></figure>
+  <figure class="shot">{{shot:tui:omajot tui in Ghostty: folders and tags, the note list, and a note with a picture, a table and a checklist}}<figcaption>Pictures in Ghostty, with the Kitty graphics protocol. Terminals without it, such as foot, show a line with the name of the picture. The colours come from the Omarchy theme.</figcaption></figure>
 </section>
 
 <section id="settings">

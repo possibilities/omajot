@@ -26,3 +26,14 @@ sample notes, the Lisbon note selected; captured with grim at 1.25×. The TUI
 read the colours of an Omarchy theme from a scratch HOME: Tokyo Night for dark,
 Catppuccin Latte for light, with the Ghostty background set to match. The
 picture is drawn with the Kitty graphics protocol.
+
+**Refreshed on 2026-09-29** (the plugin preview now uses the web app's
+renderer; new header buttons; the sync state moved to the bottom):
+`plugin-window-*` (Lisbon), `plugin-tasks-*` (the packing list with nested
+checklist items), `plugin-dropdown-*` and `plugin-qr-*` come from the plugin
+switched to a demo hub with the sample notes (a backup of shell.json restored
+it). The main window was floated at 1280×800 and made opaque by runtime
+Hyprland window rules; the dropdown was opened over IPC
+(`omarchy-shell io.github.renerocksai.omajot open`) and cropped to its border.
+`tui-tasks-*`: omajot tui in Ghostty on the packing list, Tokyo Night and
+Catppuccin Latte, as `tui-*`. `desktop-tasks-*`: `tools/site_shots.mjs`.

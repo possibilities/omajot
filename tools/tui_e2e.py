@@ -525,9 +525,10 @@ def main():
                                      (W, H, "FOLDERS", None)):
             e.tmux("resize-window", "-t", "tui", "-x", str(w), "-y", str(h))
             s = e.wait_screen(lambda s: want in s and (not_want is None or not_want not in s) and
-                              len(rows(s)) >= h and cells(rows(s)[0]) == w, f"layout at {w}x{h}")
+                              len(rows(s)) >= h and all(cells(r) == w for r in rows(s)[:h - 1]),
+                              f"layout at {w}x{h}")  # every row redrawn, not just the first
             for i, line in enumerate(rows(s)[:h - 1]):
-                assert cells(line) == w, f"{w}x{h} row {i}: {cells(line)} cells"
+                assert cells(line) == w, f"{w}x{h} row {i}: {cells(line)} cells: {line!r}"
         ok("resize 160 -> 100 -> 60 -> 160: 3, 2, 1, 3 columns, rows fit")
 
         # -------------------------------------------------- quit
