@@ -557,7 +557,7 @@ function wire() {
     const link = e.target.closest('a[href^="file:" i]')
     if (link) {
       e.preventDefault()
-      return toast('Local file links open in the Omarchy plugin and in omajot tui')
+      return toast('The browser cannot open files on your computer. Click this link in the Omarchy plugin or in omajot tui.')
     }
     const box = e.target.closest('input.task')
     if (!box) return
