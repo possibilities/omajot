@@ -26,6 +26,8 @@ Flickable {
   property real fontSize: Style.font.bodySmall
 
   signal taskToggled(int line)
+  // A file:// link: the owner confirms before anything opens.
+  signal fileLinkActivated(string path)
 
   function hexOf(colour) {
     function channel(value) { return ("0" + Math.round(value * 255).toString(16)).slice(-2) }
@@ -100,7 +102,12 @@ Flickable {
               return
             }
             var url = Model.externalLinkUrl(link)
-            if (url !== "") Quickshell.execDetached(["xdg-open", url])
+            if (url !== "") {
+              Quickshell.execDetached(["xdg-open", url])
+              return
+            }
+            var path = Model.fileLinkPath(link)
+            if (path !== "") root.fileLinkActivated(path)
           }
           HoverHandler {
             cursorShape: segmentText.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor

@@ -344,6 +344,15 @@ test("attachment urls only for well-formed names", () => {
   assert.equal(M.attachmentUrl("/d", "attachments/" + sha + ".png"), "file:///d/attachments/" + sha + ".png")
 })
 
+test("file links: local paths only, decoded", () => {
+  assert.equal(M.fileLinkPath("file:///home/me/Team%20Folder/blah.html#befunde"), "/home/me/Team Folder/blah.html")
+  assert.equal(M.fileLinkPath("file://localhost/tmp/x"), "/tmp/x")
+  assert.equal(M.fileLinkPath("file://server/share/x"), "")
+  assert.equal(M.fileLinkPath("https://example.com/"), "")
+  assert.equal(M.fileLinkPath("file:///a%00b"), "")
+  assert.equal(M.fileLinkPath("file:///bad%zz"), "")
+})
+
 test("links and tasks from the preview", () => {
   assert.equal(M.externalLinkUrl("https://ok.example/x"), "https://ok.example/x")
   assert.equal(M.externalLinkUrl("https://a@b.example"), "")

@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "../Model.mjs" as Model
@@ -298,7 +299,39 @@ FocusScope {
 
   readonly property bool typing: editor.editorFocused || searchField.activeFocus || renameField.activeFocus
 
+  // --- file links -----------------------------------------------------------
+  //
+  // A file:// link in the preview: tools/open-file.sh checks it (exists, no
+  // program), then a confirmation shows the path before anything opens.
+
+  property string fileLinkPath: ""
+  // "" (no dialog), "checking", then ok | missing | program.
+  property string fileVerdict: ""
+
+  function openFileLink(path) {
+    root.fileLinkPath = path
+    root.fileVerdict = "checking"
+    root.forceActiveFocus() // Esc, Tab and Enter go to the dialog
+    fileCheck.command = ["sh", root.service.pluginPath("tools/open-file.sh"), "--check", path]
+    fileCheck.running = true
+  }
+
+  function closeFileLink() {
+    root.fileVerdict = ""
+    root.forceActiveFocus()
+  }
+
+  Process {
+    id: fileCheck
+    stdout: StdioCollector { id: fileCheckOut; waitForEnd: true }
+    onExited: {
+      var verdict = String(fileCheckOut.text || "").trim()
+      root.fileVerdict = verdict === "ok" || verdict === "program" ? verdict : "missing"
+    }
+  }
+
   Keys.onPressed: function(event) {
+    if (fileDialog.handleKey(event)) { event.accepted = true; return }
     var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
     if (ctrl && event.key === Qt.Key_N) { root.newNote(); event.accepted = true; return }
     if (ctrl && event.key === Qt.Key_F) { searchField.forceActiveFocus(); searchField.selectAll(); event.accepted = true; return }
@@ -893,6 +926,7 @@ FocusScope {
           root.activePane = 1
           root.forceActiveFocus()
         }
+        onFileLinkActivated: function(path) { root.openFileLink(path) }
       }
 
       Text {
@@ -1118,6 +1152,28 @@ FocusScope {
         root.sourceId = ""
       }
       root.confirmDeleteFolder = ""
+    }
+  }
+
+  ConfirmDialog {
+    id: fileDialog
+    anchors.fill: parent
+    z: 20
+    opened: root.fileVerdict === "ok" || root.fileVerdict === "missing" || root.fileVerdict === "program"
+    selectedIndex: root.fileVerdict === "ok" ? 1 : 0
+    message: root.fileVerdict === "ok" ? "Open this file from the note?\n\n" + root.fileLinkPath
+      : root.fileVerdict === "missing" ? "This file is not on this computer:\n\n" + root.fileLinkPath
+      : "omajot opens no programs from a note:\n\n" + root.fileLinkPath
+    cancelText: root.fileVerdict === "ok" ? "Cancel" : "Close"
+    confirmText: root.fileVerdict === "ok" ? "Open" : "OK"
+    background: root.background
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    onCanceled: root.closeFileLink()
+    onConfirmed: {
+      if (root.fileVerdict === "ok")
+        Quickshell.execDetached(["sh", root.service.pluginPath("tools/open-file.sh"), root.fileLinkPath])
+      root.closeFileLink()
     }
   }
 }

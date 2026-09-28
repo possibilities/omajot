@@ -19,7 +19,8 @@
   </ul>
   <figure class="shot">{{shot:plugin-dropdown:The dropdown under the note icon in the Omarchy bar}}<figcaption>The dropdown, under the note icon in the bar</figcaption></figure>
   <figure class="shot">{{shot:plugin-window:The main window with folders, tags, the note list and a note with a picture, a table and a checklist}}<figcaption>The main window, split layout</figcaption></figure>
-  <p>The phone button next to the omajot name shows your hub URL as a QR code. The globe button next to it opens the web app in its own window, and the terminal button opens <code>omajot tui</code> in your terminal. Both windows open popped out like <kbd>Super</kbd>+<kbd>O</kbd>: floating, centred and pinned. If the window is open already, the button brings it to the front. In the dropdown, press <kbd>o</kbd> to open the selected note in the main window.</p>
+  <p>Next to the omajot name are four buttons. The window button (in the dropdown) opens the selected note in the main window; <kbd>o</kbd> does the same. The terminal button opens <code>omajot tui</code> in your terminal, and the globe button opens the web app in its own window. Both windows open popped out like <kbd>Super</kbd>+<kbd>O</kbd>: floating, centred and pinned; if the window is open already, the button brings it to the front. The phone button shows your hub URL as a QR code.</p>
+  <p>In the preview, web links open in your browser. A link to a local file (<code>file://</code>) asks first, and opens only if the file or folder exists on this computer and is no program.</p>
   <figure class="shot">{{shot:plugin-qr:The phone QR code over the main window}}<figcaption>Scan the code with your phone's camera</figcaption></figure>
 </section>
 
@@ -137,7 +138,7 @@
 
 <section id="terminal">
   <h2>The terminal UI</h2>
-  <p>Run <code>omajot tui</code> in a terminal. It shows the folders and tags, the notes and the note, like the main window. Move with <code>j</code> <code>k</code> <code>h</code> <code>l</code> or the arrow keys, search with <code>/</code>, and press <code>e</code> to edit the note in <code>$EDITOR</code> (for example Neovim). Each save goes into the note at once, and changes from your other devices show up while you read. Press <code>?</code> for all keys. The <a href="cli.html#tui">CLI reference</a> has the details.</p>
+  <p>Run <code>omajot tui</code> in a terminal. It shows the folders and tags, the notes and the note, like the main window. Move with <code>j</code> <code>k</code> <code>h</code> <code>l</code> or the arrow keys, search with <code>/</code>, and press <code>e</code> to edit the note in <code>$EDITOR</code> (for example Neovim). Each save goes into the note at once, and changes from your other devices show up while you read. The mouse works too: click to select, click a checkbox to tick it, and click a note twice to edit it. Press <code>?</code> for all keys. The <a href="cli.html#tui">CLI reference</a> has the details.</p>
   <figure class="shot">{{shot:tui:omajot tui in Ghostty: folders and tags, the note list, and a note with a picture, a table and a checklist}}<figcaption>omajot tui in Ghostty. The picture uses the Kitty graphics protocol; the colours come from the Omarchy theme.</figcaption></figure>
 </section>
 

@@ -850,6 +850,18 @@ export function externalLinkUrl(link) {
   return url
 }
 
+// The local path of a `file://` link (`file:///p` or `file://localhost/p`,
+// percent-decoded), "" for anything else. Opening it is up to the user
+// (a confirmation) and tools/open-file.sh (no programs).
+export function fileLinkPath(link) {
+  const text = String(link === undefined || link === null ? "" : link).trim()
+  const m = /^file:\/\/(?:localhost)?(\/[^?#]*)/i.exec(text)
+  if (!m || m[1].length < 2) return ""
+  let path
+  try { path = decodeURIComponent(m[1]) } catch (e) { return "" }
+  return /[\u0000-\u001f]/.test(path) ? "" : path
+}
+
 export function taskLine(link) {
   const match = /^task:(\d{1,7})$/.exec(String(link || ""))
   return match ? parseInt(match[1], 10) : -1

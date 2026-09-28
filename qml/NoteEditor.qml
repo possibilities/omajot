@@ -31,6 +31,7 @@ Item {
 
   // Esc inside the editor: the owner decides (back to the list, close…).
   signal escapePressed()
+  signal fileLinkActivated(string path)
 
   property string loadedNote: ""
   property bool applying: false
@@ -300,6 +301,7 @@ Item {
     fontFamily: root.fontFamily
     fontSize: root.fontSize
     onTaskToggled: function(line) { root.toggleTask(line) }
+    onFileLinkActivated: function(path) { root.fileLinkActivated(path) }
   }
 
   Text {
