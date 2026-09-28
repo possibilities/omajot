@@ -14,6 +14,7 @@ test('headings, emphasis, code, links', () => {
 test('escapes html and rejects javascript urls', () => {
   assert.equal(renderInline('<script>'), '&lt;script&gt;')
   assert.match(renderInline('[x](javascript:alert(1))'), /href="#"/)
+  assert.match(renderInline('[x](file:///home/me/a%20b.html#s)'), /href="file:\/\/\/home\/me\/a%20b.html#s"/)
 })
 
 test('attachments map to blob urls, in images and links', () => {

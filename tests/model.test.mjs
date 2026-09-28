@@ -399,6 +399,12 @@ test("previewHtml: bare URLs with fragments are one link", () => {
   assert.match(out, /<a href="https:\/\/c\.example\/p_q_r" style="color:#ff0000">https:\/\/c\.example\/p_q_r<\/a>\./)
 })
 
+test("previewHtml: file links stay links, for the confirmation", () => {
+  const out = M.previewHtml("see [findings](file:///home/me/Team%20Folder/blah.html#befunde)", look)
+  assert.match(out, /<a href="file:\/\/\/home\/me\/Team%20Folder\/blah.html#befunde" style="color:#ff0000">findings<\/a>/)
+  assert.equal(M.fileLinkPath("file:///home/me/Team%20Folder/blah.html#befunde"), "/home/me/Team Folder/blah.html")
+})
+
 test("previewHtml: no remote fetches, no raw HTML", () => {
   const out = M.previewHtml("![r](https://evil.example/p.png) <img src=x alt=y> <script>x</script>", look)
   assert.doesNotMatch(out, /<img/)

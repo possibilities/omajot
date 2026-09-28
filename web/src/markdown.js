@@ -35,7 +35,9 @@ function safeUrl(url, resolve) {
   const name = attachmentName(url)
   if (name) return resolve(name)
   const trimmed = url.trim()
-  if (/^(https?:|mailto:|#|\/|\.{0,2}\/)/i.test(trimmed)) return trimmed
+  // file: stays a link: the Omarchy plugin and the TUI open local files after
+  // a confirmation (browsers do not follow file: links from a web page).
+  if (/^(https?:|mailto:|file:|#|\/|\.{0,2}\/)/i.test(trimmed)) return trimmed
   if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(trimmed)) return trimmed
   if (!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed // relative
   return '#'

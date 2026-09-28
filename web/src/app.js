@@ -553,6 +553,12 @@ function wire() {
     }
   })
   $('.preview').addEventListener('click', (e) => {
+    // Browsers do not open file: links from a web page; the plugin and the TUI do.
+    const link = e.target.closest('a[href^="file:" i]')
+    if (link) {
+      e.preventDefault()
+      return toast('Local file links open in the Omarchy plugin and in omajot tui')
+    }
     const box = e.target.closest('input.task')
     if (!box) return
     e.preventDefault()
