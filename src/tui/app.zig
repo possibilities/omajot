@@ -24,6 +24,7 @@ const Theme = @import("theme.zig").Theme;
 
 pub const Event = union(enum) {
     key_press: vaxis.Key,
+    mouse: vaxis.Mouse,
     winsize: vaxis.Winsize,
     /// The event thread has news; see `Shared`.
     daemon,
@@ -56,7 +57,43 @@ const Shared = struct {
 };
 
 const Focus = enum(u2) { sources = 0, notes = 1, preview = 2 };
-const Mode = enum { browse, search, prompt, picker, help };
+
+/// A window's place on the screen, in cells, for mouse clicks.
+const Rect = struct {
+    x: i32 = 0,
+    y: i32 = 0,
+    w: u16 = 0,
+    h: u16 = 0,
+
+    fn of(win: vaxis.Window) Rect {
+        return .{ .x = win.x_off, .y = win.y_off, .w = win.width, .h = win.height };
+    }
+
+    /// The cell inside, relative to the window, or null.
+    fn at(r: Rect, col: i32, row: i32) ?struct { col: u16, row: u16 } {
+        if (col < r.x or row < r.y or col >= r.x + r.w or row >= r.y + r.h) return null;
+        return .{ .col = @intCast(col - r.x), .row = @intCast(row - r.y) };
+    }
+};
+
+/// Where the last frame drew what (all zero when a column is hidden).
+const Areas = struct {
+    sources: Rect = .{},
+    notes: Rect = .{},
+    /// Rows above the first note card (the search field).
+    notes_top: u16 = 0,
+    preview: Rect = .{},
+    picker: Rect = .{},
+    picker_top: usize = 0,
+    /// The confirmation box and its buttons.
+    confirm_box: Rect = .{},
+    confirm_open: Rect = .{},
+    confirm_cancel: Rect = .{},
+};
+
+/// Two clicks on the same note within this time open it in the editor.
+const double_click_ms = 400;
+const Mode = enum { browse, search, prompt, picker, help, confirm };
 const Prompt = enum { new_note, new_folder, rename_folder };
 const Tone = enum { info, ok, warn };
 
@@ -104,6 +141,16 @@ pub const App = struct {
     preview_id: std.ArrayList(u8) = .empty,
     preview_updated: i64 = -1,
     preview_text: std.ArrayList(u8) = .empty,
+
+    /// Mouse reporting (off with --no-mouse).
+    mouse: bool = true,
+    areas: Areas = .{},
+    /// The preview's checkboxes in the last frame (frame arena).
+    tasks: std.ArrayList(md.TaskHit) = .empty,
+    last_click: struct { ms: i64 = 0, note: usize = std.math.maxInt(usize) } = .{},
+    /// A local file a link asks to open, waiting for the confirmation.
+    confirm_path: std.ArrayList(u8) = .empty,
+    pointer: bool = false,
 
     message: []const u8 = "",
     message_buf: [320]u8 = undefined,
@@ -353,6 +400,11 @@ pub const App = struct {
             .search => return app.searchKey(k),
             .prompt => return app.promptKey(k),
             .picker => return app.pickerKey(k),
+            .confirm => {
+                if (k.matches(vaxis.Key.enter, .{}) or k.matches('y', .{}) or k.matches('o', .{})) return app.confirmOpen();
+                if (k.matches(vaxis.Key.escape, .{}) or k.matches('n', .{}) or k.matches('q', .{})) app.mode = .browse;
+                return;
+            },
             .browse => {},
         }
         app.message = "";
@@ -439,6 +491,222 @@ pub const App = struct {
             .help => app.mode = .help,
             .redraw => app.vx.queueRefresh(),
         }
+    }
+
+    // ------------------------------------------------------------ mouse
+
+    /// Clicks and the wheel. Motion only changes the pointer shape. Returns
+    /// whether the screen changes, so plain motion redraws nothing.
+    /// `m` is in cells: vaxis.Loop has translated pixel reports already
+    /// (translating twice trips an assertion in pixel mode).
+    pub fn onMouse(app: *App, m: vaxis.Mouse) !bool {
+        const col: i32 = m.col;
+        const row: i32 = m.row;
+        if (m.type == .motion) return app.setPointer(app.clickable(col, row));
+        if (m.type != .press) return false;
+        const wheel: i32 = switch (m.button) {
+            .wheel_up => -1,
+            .wheel_down => 1,
+            else => 0,
+        };
+        switch (app.mode) {
+            .help => {
+                app.mode = .browse;
+                return true;
+            },
+            .prompt => return false,
+            .confirm => {
+                if (m.button != .left) return false;
+                if (app.areas.confirm_open.at(col, row) != null) {
+                    app.confirmOpen();
+                } else if (app.areas.confirm_cancel.at(col, row) != null or app.areas.confirm_box.at(col, row) == null) {
+                    app.mode = .browse;
+                }
+                return true;
+            },
+            .picker => {
+                if (wheel != 0) {
+                    const n: i32 = @intCast(app.picker.len);
+                    app.picker_sel = @intCast(std.math.clamp(@as(i32, @intCast(app.picker_sel)) + wheel, 0, @max(n - 1, 0)));
+                    return true;
+                }
+                if (m.button != .left) return false;
+                if (app.areas.picker.at(col, row)) |c| {
+                    const i = app.areas.picker_top + c.row;
+                    if (i >= app.picker.len) return false;
+                    app.picker_sel = i;
+                    try app.pickerKey(.{ .codepoint = vaxis.Key.enter });
+                } else app.mode = .browse;
+                return true;
+            },
+            // A click leaves the search field and keeps the result, like Enter.
+            .search => app.mode = .browse,
+            .browse => {},
+        }
+        app.message = "";
+        if (wheel != 0) {
+            if (app.areas.sources.at(col, row) != null) try app.moveIn(.sources, wheel);
+            if (app.areas.notes.at(col, row) != null) try app.moveIn(.notes, wheel);
+            if (app.areas.preview.at(col, row) != null) app.scrollBy(wheel * 3);
+            return true;
+        }
+        if (m.button != .left) return false;
+        if (app.areas.sources.at(col, row)) |c| {
+            app.focus = .sources;
+            const i = app.src_top + c.row;
+            if (i < app.sources.len and app.sources[i].kind != .header) try app.setSource(i);
+            return true;
+        }
+        if (app.areas.notes.at(col, row)) |c| {
+            app.focus = .notes;
+            const i = app.noteAt(c.row) orelse return true;
+            const now = Io.Clock.awake.now(app.io).toMilliseconds();
+            const double = i == app.last_click.note and now - app.last_click.ms < double_click_ms;
+            app.last_click = .{ .ms = now, .note = i };
+            app.setNote(i);
+            if (double) {
+                app.last_click = .{};
+                if (app.selected()) |n| try app.editNote(n.id, n.title);
+            }
+            return true;
+        }
+        if (app.areas.preview.at(col, row) != null) {
+            app.focus = .preview;
+            if (app.taskAt(col, row)) |line| return app.toggleTask(line);
+            if (app.linkAt(col, row)) |uri| app.openLink(uri);
+            return true;
+        }
+        return false;
+    }
+
+    /// Move the selection of a column without giving it the focus.
+    fn moveIn(app: *App, column: Focus, delta: i32) !void {
+        const keep = app.focus;
+        defer app.focus = keep;
+        app.focus = column;
+        try app.move(delta);
+    }
+
+    /// The note of a row in the notes column (a card is title, snippet, gap).
+    fn noteAt(app: *App, row: u16) ?usize {
+        if (row < app.areas.notes_top) return null;
+        const rel = row - app.areas.notes_top;
+        if (rel % 3 == 2) return null;
+        const i = app.list_top + rel / 3;
+        return if (i < app.visible.len) i else null;
+    }
+
+    fn taskAt(app: *App, col: i32, row: i32) ?usize {
+        const p = app.areas.preview;
+        for (app.tasks.items) |task| {
+            const x = p.x + task.col;
+            if (row == p.y + task.row and col >= x and col < x + task.width) return task.line;
+        }
+        return null;
+    }
+
+    /// The URL of a link drawn in this cell (an OSC 8 hyperlink in the preview).
+    fn linkAt(app: *App, col: i32, row: i32) ?[]const u8 {
+        if (col < 0 or row < 0) return null;
+        const cell = app.vx.screen.readCell(@intCast(col), @intCast(row)) orelse return null;
+        return if (cell.link.uri.len > 0) cell.link.uri else null;
+    }
+
+    fn clickable(app: *App, col: i32, row: i32) bool {
+        switch (app.mode) {
+            .picker => return app.areas.picker.at(col, row) != null,
+            .confirm => return app.areas.confirm_open.at(col, row) != null or app.areas.confirm_cancel.at(col, row) != null,
+            .browse, .search => {},
+            .help, .prompt => return false,
+        }
+        if (app.areas.sources.at(col, row)) |c| {
+            const i = app.src_top + c.row;
+            return i < app.sources.len and app.sources[i].kind != .header;
+        }
+        if (app.areas.notes.at(col, row)) |c| return app.noteAt(c.row) != null;
+        return app.taskAt(col, row) != null or (app.areas.preview.at(col, row) != null and app.linkAt(col, row) != null);
+    }
+
+    /// The pointer hand over things a click changes; true when it changed.
+    fn setPointer(app: *App, on: bool) bool {
+        if (on == app.pointer) return false;
+        app.pointer = on;
+        app.vx.setMouseShape(if (on) .pointer else .default);
+        return true;
+    }
+
+    /// Tick or untick the checkbox on `line` of the shown note. The edit is a
+    /// `put` based on the text the preview shows, so changes made elsewhere
+    /// meanwhile are merged, as with the editor.
+    fn toggleTask(app: *App, line: usize) !bool {
+        const n = app.selected() orelse return false;
+        const a = app.scratch.allocator();
+        const id = try a.dupe(u8, n.id);
+        const base = try a.dupe(u8, app.previewText());
+        const text = (try model.toggleTaskLine(a, base, line)) orelse return false;
+        _ = app.call(a, "put", .{ .note = id, .base = base, .text = text }) catch return true;
+        app.forgetPreview();
+        try app.refresh();
+        return true;
+    }
+
+    /// Web and mail links open at once. A `file://` link opens after a
+    /// confirmation, and only when the file or folder exists here and is no
+    /// program (no execute bit, no .desktop file): notes also come from other
+    /// devices, agents and pasted pages.
+    fn openLink(app: *App, uri: []const u8) void {
+        const web = std.mem.startsWith(u8, uri, "https://") or std.mem.startsWith(u8, uri, "http://") or std.mem.startsWith(u8, uri, "mailto:");
+        if (web) {
+            if (app.launch(uri)) app.say(.info, "Opened {s}", .{uri});
+            return;
+        }
+        const a = app.scratch.allocator();
+        const path = (model.fileLinkPath(a, uri) catch null) orelse {
+            app.say(.warn, "Only web, mail and local file links open from a note, not {s}", .{uri});
+            return;
+        };
+        const stat = Io.Dir.cwd().statFile(app.io, path, .{}) catch {
+            app.say(.warn, "Not on this computer: {s}", .{path});
+            return;
+        };
+        const program = stat.kind == .file and (std.mem.endsWith(u8, path, ".desktop") or
+            (Io.File.Permissions.has_executable_bit and stat.permissions.toMode() & 0o111 != 0));
+        if (program or (stat.kind != .file and stat.kind != .directory)) {
+            app.say(.warn, "Not opened: {s} is a program or a special file", .{path});
+            return;
+        }
+        app.confirm_path.clearRetainingCapacity();
+        app.confirm_path.appendSlice(app.gpa, path) catch return;
+        app.mode = .confirm;
+    }
+
+    fn confirmOpen(app: *App) void {
+        app.mode = .browse;
+        if (app.launch(app.confirm_path.items)) app.say(.info, "Opened {s}", .{app.confirm_path.items});
+    }
+
+    /// Hand a URL or path to the desktop's opener (xdg-open, macOS open).
+    fn launch(app: *App, target: []const u8) bool {
+        const opener = switch (builtin.os.tag) {
+            .macos => "open",
+            .windows => {
+                app.say(.info, "{s}", .{target});
+                return false;
+            },
+            else => "xdg-open",
+        };
+        const result = std.process.run(app.gpa, app.io, .{
+            .argv = &.{ opener, target },
+            .stdout_limit = .limited(4096),
+            .stderr_limit = .limited(4096),
+            .timeout = .{ .duration = .{ .raw = .fromSeconds(10), .clock = .awake } },
+        }) catch {
+            app.say(.warn, "Cannot run {s} for {s}", .{ opener, target });
+            return false;
+        };
+        app.gpa.free(result.stdout);
+        app.gpa.free(result.stderr);
+        return true;
     }
 
     fn move(app: *App, delta: i32) !void {
@@ -639,6 +907,7 @@ pub const App = struct {
         }
         try app.vx.enterAltScreen(w);
         try app.vx.enableDetectedFeatures(w);
+        if (app.mouse) try app.vx.setMouseMode(w, true);
         if (app.tty.getWinsize()) |ws| try app.vx.resize(app.gpa, w, ws) else |_| {}
         app.vx.queueRefresh();
         // Pictures were drawn on the screen the editor replaced.
@@ -786,6 +1055,7 @@ pub const App = struct {
             }, .{ .wrap = .none });
             top = 2;
         }
+        app.areas.notes_top = top;
         const per: u16 = 3; // title, time + snippet, gap
         const fit: usize = @max((win.height -| top) / per, 1);
         if (app.note < app.list_top) app.list_top = app.note;
@@ -856,10 +1126,11 @@ pub const App = struct {
         _ = win.child(.{ .height = 1 }).print(meta.items, .{ .wrap = .none });
         const body = win.child(.{ .y_off = 2 });
         app.preview_rows = body.height;
+        app.areas.preview = .of(body);
         const images: md.Images = .{ .ctx = app, .get = getPicture };
-        app.preview_height = try md.render(body, fa, text, t, 0, false, images);
+        app.preview_height = try md.render(body, fa, text, t, 0, false, images, null);
         app.scroll = @min(app.scroll, app.preview_height -| app.preview_rows);
-        _ = try md.render(body, fa, text, t, app.scroll, true, images);
+        _ = try md.render(body, fa, text, t, app.scroll, true, images, &app.tasks);
     }
 
     /// A bordered box in the middle of `win`; returns its inside.
@@ -909,6 +1180,8 @@ pub const App = struct {
         const rows: u16 = @intCast(@min(app.picker.len, 18));
         const inner = app.box(win, 50, rows + 2, try std.fmt.allocPrint(fa, " Move \u{201c}{s}\u{201d} to ", .{title(n.title)}));
         const top = if (app.picker_sel >= rows) app.picker_sel + 1 - rows else 0;
+        app.areas.picker = .of(inner);
+        app.areas.picker_top = top;
         var i = top;
         while (i < app.picker.len and i < top + rows) : (i += 1) {
             const target = app.picker[i];
@@ -926,6 +1199,37 @@ pub const App = struct {
                 .{ .text = if (sameFolder(target.id, n.folder)) "  " ++ glyph.check else "", .style = mark },
             }, .{ .wrap = .none });
         }
+    }
+
+    fn drawConfirm(app: *App, win: vaxis.Window) void {
+        const t = app.theme;
+        const path = app.confirm_path.items;
+        const width: u16 = @intCast(@min(@max(win.gwidth(path) + 6, 46), win.width -| 4));
+        const inner = app.box(win, width, 7, " Open a file from the note? ");
+        // The whole box, border included: a click outside it cancels.
+        app.areas.confirm_box = .{ .x = @as(i32, inner.x_off) - 2, .y = @as(i32, inner.y_off) - 1, .w = inner.width + 4, .h = inner.height + 2 };
+        // The end of a long path matters most: show that.
+        var shown: []const u8 = path;
+        while (shown.len > 0 and inner.gwidth(shown) + 2 > inner.width) {
+            var cut: usize = 1;
+            while (cut < shown.len and shown[cut] & 0xC0 == 0x80) cut += 1;
+            shown = shown[cut..];
+        }
+        _ = inner.child(.{ .y_off = 1, .height = 1 }).print(&.{
+            .{ .text = if (shown.len < path.len) "…" else "", .style = app.st(t.muted, t.bg_side) },
+            .{ .text = shown, .style = app.st(t.fg, t.bg_side) },
+        }, .{ .wrap = .none });
+        const buttons = inner.child(.{ .y_off = 3, .height = 1 });
+        const open = buttons.child(.{ .width = 10 });
+        var open_st = app.selStyle(app.st(t.fg, t.bg_side));
+        open_st.bold = true;
+        open.fill(.{ .style = open_st });
+        _ = open.print(&.{.{ .text = "  Open  ", .style = open_st }}, .{ .wrap = .none });
+        const cancel = buttons.child(.{ .x_off = 12, .width = 10 });
+        _ = cancel.print(&.{.{ .text = "  Cancel", .style = app.st(t.fg, t.bg_side) }}, .{ .wrap = .none });
+        _ = buttons.child(.{ .x_off = 24 }).print(&.{.{ .text = "Enter · Esc", .style = app.st(t.muted, t.bg_side) }}, .{ .wrap = .none });
+        app.areas.confirm_open = .of(open);
+        app.areas.confirm_cancel = .of(cancel);
     }
 
     fn syncLabel(app: *App) struct { dot: []const u8, text: []const u8, color: [3]u8 } {
@@ -968,6 +1272,8 @@ pub const App = struct {
         const win = app.vx.window();
         win.clear();
         win.fill(.{ .style = .{ .bg = t.c(t.bg) } });
+        app.areas = .{};
+        app.tasks = .empty; // the frame arena of the last frame is gone
         if (win.height < 3 or win.width < 20) return;
         const body_h = win.height - 1;
         const body = win.child(.{ .height = body_h });
@@ -981,6 +1287,7 @@ pub const App = struct {
         if (wide or app.focus == .sources) {
             const sw: u16 = if (wide) 30 else if (medium) 34 else w;
             const inner = app.panel(body, x, sw, body_h, " omajot ", app.focus == .sources, t.bg_side);
+            app.areas.sources = .of(inner);
             try app.drawSources(inner, fa);
             app.fillDefaultBg(inner, t.bg_side);
             x += sw;
@@ -990,6 +1297,7 @@ pub const App = struct {
             const src = app.currentSource();
             const label = try std.fmt.allocPrint(fa, " {s}{s} · {d} ", .{ if (src.kind == .tag) "#" else "", src.label, app.visible.len });
             const inner = app.panel(body, x, lw, body_h, label, app.focus == .notes, t.bg);
+            app.areas.notes = .of(inner);
             try app.drawNotes(inner, fa);
             app.fillDefaultBg(inner, t.bg);
             x += lw;
@@ -1004,6 +1312,7 @@ pub const App = struct {
             .help => app.drawHelp(body),
             .prompt => try app.drawPrompt(body, fa),
             .picker => try app.drawPicker(body, fa),
+            .confirm => app.drawConfirm(body),
             .browse, .search => {},
         }
 
@@ -1034,6 +1343,7 @@ pub const App = struct {
             .prompt => "Enter ok · Esc cancel",
             .picker => "j/k choose · Enter move · Esc cancel",
             .help => "any key closes",
+            .confirm => "Enter / y open · Esc / n cancel",
         };
         const hw: u16 = bar.gwidth(hints) + 1;
         if (left.row == 0 and !left.overflow and left.col + 2 + hw <= bar.width)

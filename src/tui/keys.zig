@@ -90,6 +90,9 @@ pub const help = [_][2][]const u8{
     .{ "Ctrl+L", "redraw" },
     .{ "?", "this help" },
     .{ "q", "quit" },
+    .{ "click", "select; twice on a note: edit" },
+    .{ "click in note", "tick a checkbox, open a link" },
+    .{ "wheel", "move in a list, scroll the note" },
 };
 
 test "key map" {

@@ -72,6 +72,13 @@ class Env:
         self.plan = os.path.join(tmp, "plan.json")
         self.editor = os.path.join(tmp, "fake_editor.py")
         open(self.editor, "w").write(FAKE_EDITOR)
+        # A link click runs xdg-open: this one only notes what it would open.
+        self.bin_dir = os.path.join(tmp, "fakebin")
+        self.opened = os.path.join(tmp, "opened.txt")
+        os.makedirs(self.bin_dir)
+        opener = os.path.join(self.bin_dir, "xdg-open")
+        open(opener, "w").write(f'#!/bin/sh\necho "$1" >> "{self.opened}"\n')
+        os.chmod(opener, 0o755)
 
     def call(self, cmd, **fields):
         """One request on the daemon socket (what the TUI talks to)."""
@@ -117,6 +124,7 @@ class Env:
 export HOME="{self.env['HOME']}" XDG_CONFIG_HOME="{self.env['XDG_CONFIG_HOME']}" XDG_DATA_HOME="{self.env['XDG_DATA_HOME']}"
 export XDG_RUNTIME_DIR="{self.run}" XDG_STATE_HOME="{self.env['XDG_STATE_HOME']}"
 export EDITOR='python3 {self.editor} --plan {self.plan}'
+export PATH="{self.bin_dir}:$PATH"
 unset VISUAL NO_COLOR
 {extra_env}
 stty -a > "{self.tmp}/{name}.stty.before"
@@ -139,6 +147,15 @@ exec sleep 100000
         for k in keys:
             self.tmux("send-keys", "-t", name, k)
             time.sleep(0.15)
+
+    def click(self, col, row, pause=0.2, name="tui"):
+        """A left click on a cell (0-based), as an SGR mouse report."""
+        self.tmux("send-keys", "-t", name, "-l", f"\x1b[<0;{col + 1};{row + 1}M\x1b[<0;{col + 1};{row + 1}m")
+        time.sleep(pause)
+
+    def wheel(self, col, row, down, name="tui"):
+        self.tmux("send-keys", "-t", name, "-l", f"\x1b[<{65 if down else 64};{col + 1};{row + 1}M")
+        time.sleep(0.2)
 
     def text(self, s, name="tui"):
         self.tmux("send-keys", "-t", name, "-l", s)
@@ -418,6 +435,79 @@ def main():
         e.wait_screen(lambda s: "move down / up" not in s, "help closes")
         ok("? shows the keys")
 
+        # -------------------------------------------------- mouse
+        assert e.tmux("display", "-p", "-t", "tui", "#{mouse_any_flag}").strip() == "1", "mouse mode is not on"
+        e.keys("g")
+        s = e.wait_screen(lambda s: preview_title(s) == card_title(s, 0), "first note")
+        third, fourth = card_title(s, 2), card_title(s, 3)
+        e.click(40, 1 + 3 * 2)  # the title row of the third card
+        s = e.wait_screen(lambda s: preview_title(s) == third, f"a click selects {third!r}")
+        e.wheel(40, 10, down=True)
+        e.wait_screen(lambda s: preview_title(s) == fourth, "the wheel moves to the next note")
+        e.click(6, 2)  # "Pinned" in the sources column
+        e.wait_screen(lambda s: "Pinned · " in rows(s)[0], "a click selects Pinned")
+        e.click(6, 1)
+        e.wait_screen(lambda s: "All notes · " in rows(s)[0], "a click selects All notes")
+        # A checkbox in the preview: the Welcome note's first open one.
+        e.keys("/")
+        e.text("QR code")
+        e.keys("Enter")
+        s = e.wait_screen(lambda s: preview_title(s).startswith("Welcome"), "search finds the Welcome note")
+        before = e.omajot("cat", "Welcome to omajot 👋").count("- [x]")
+        box = next((r, line) for r, line in enumerate(rows(s)) if r >= 3 and "\uf096" in line[74:])
+        e.click(cells(box[1][:box[1].index("\uf096", 74)]), box[0])
+        wait_for(lambda: e.omajot("cat", "Welcome to omajot 👋").count("- [x]") == before + 1, "the click ticks the box", 10)
+        e.keys("Escape")
+        # Two clicks on a card open the note in the editor.
+        json.dump({"mode": "append", "text": "Opened with a double click\n"}, open(e.plan, "w"))
+        e.keys("g")
+        s = e.wait_screen(lambda s: preview_title(s) == card_title(s, 0), "first note again")
+        name = card_title(s, 0)
+        e.click(40, 1, pause=0.05)
+        e.click(40, 1)
+        e.wait_screen(lambda s: "Saved" in status(s), "a double click edits the note")
+        ok("mouse: click selects notes and sources, the wheel moves, a click ticks a box, a double click edits")
+
+        # -------------------------------------------------- links: web at once, local files after a confirmation
+        doc = os.path.join(tmp, "doc folder", "notes.txt")
+        os.makedirs(os.path.dirname(doc))
+        open(doc, "w").write("x")
+        prog = os.path.join(tmp, "prog.sh")
+        open(prog, "w").write("#!/bin/sh\n")
+        os.chmod(prog, 0o755)
+        link_note = ("Links test\n\nhttps://example.com/omajot-e2e\n\n[LINKDOC](file://" + doc.replace(" ", "%20") + ")\n\n"
+                     "[LINKPROG](file://" + prog + ")\n\n[LINKGONE](file:///nope/not-here.txt)\n")
+        e.omajot("write", "Links test", stdin=link_note)
+        e.keys("/")
+        e.text("LINKDOC")
+        e.keys("Enter")
+        s = e.wait_screen(lambda s: preview_title(s) == "Links test", "the links note")
+
+        def click_text(label):
+            scr = e.screen()
+            r, line = next((r, line) for r, line in enumerate(rows(scr)) if r >= 3 and label in line[74:])
+            e.click(cells(line[:line.index(label, 74)]) + 1, r)
+
+        click_text("example.com/omajot-e2e")
+        wait_for(lambda: os.path.exists(e.opened) and "https://example.com/omajot-e2e" in open(e.opened).read(), "a web link opens", 10)
+        click_text("LINKDOC")
+        e.wait_screen("Open a file from the note?", "a file link asks first")
+        assert "notes.txt" in e.screen() and doc not in open(e.opened).read(), "opened before the confirmation"
+        e.keys("Escape")
+        e.wait_screen(lambda s: "Open a file from the note?" not in s, "Esc cancels")
+        assert doc not in open(e.opened).read(), "opened after Esc"
+        click_text("LINKDOC")
+        e.wait_screen("Open a file from the note?", "asks again")
+        e.keys("Enter")
+        wait_for(lambda: doc in open(e.opened).read(), "Enter opens the file (decoded path)", 10)
+        click_text("LINKPROG")
+        e.wait_screen(lambda s: "is a program" in status(s), "a program is not opened")
+        click_text("LINKGONE")
+        e.wait_screen(lambda s: "Not on this computer" in status(s), "a missing file says so")
+        assert prog not in open(e.opened).read()
+        e.keys("Escape", "h")  # clear the search; the clicks gave the preview the focus
+        ok("links: a web link opens, a file link after a confirmation, programs and missing files do not")
+
         # -------------------------------------------------- the daemon goes away and comes back
         daemon_args = [e.bin, "daemon", "--background", "--data", e.data, "--socket", e.sock, "--hub", hub_url]
         procs[1].terminate()
@@ -444,8 +534,9 @@ def main():
         e.keys("q")
         e.wait_screen("EXIT=0", "q exits 0")
         assert e.stty_same("tui"), "stty differs after q"
+        assert e.tmux("display", "-p", "-t", "tui", "#{mouse_any_flag}").strip() == "0", "mouse mode left on after q"
         assert open(os.path.join(tmp, "tui.stderr")).read() == "", "stderr not empty"
-        ok("q exits 0, terminal settings unchanged, nothing on stderr")
+        ok("q exits 0, terminal settings and mouse mode restored, nothing on stderr")
 
         # -------------------------------------------------- panic and SIGTERM
         e.start("panic", extra_env="export OMAJOT_TUI_PANIC_KEY=1")
@@ -453,6 +544,7 @@ def main():
         e.keys("!", name="panic")
         e.wait_screen(lambda s: "EXIT=" in s and "EXIT=0" not in s, "panic exits", name="panic")
         assert e.stty_same("panic"), "stty differs after a panic"
+        assert e.tmux("display", "-p", "-t", "panic", "#{mouse_any_flag}").strip() == "0", "mouse mode left on (panic)"
         ok("a panic gives the terminal back")
 
         e.start("mono", extra_env="export NO_COLOR=1")
@@ -470,6 +562,7 @@ def main():
         os.kill(pid, 15)
         e.wait_screen("EXIT=143", "SIGTERM exits 143", name="term")
         assert e.stty_same("term"), "stty differs after SIGTERM"
+        assert e.tmux("display", "-p", "-t", "term", "#{mouse_any_flag}").strip() == "0", "mouse mode left on (term)"
         ok("SIGTERM gives the terminal back")
 
         kitty_pictures(e)

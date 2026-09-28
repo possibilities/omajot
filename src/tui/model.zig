@@ -273,6 +273,61 @@ fn sample() Store {
     return .{ .notes = &S.notes, .folders = &S.folders };
 }
 
+/// The note text with the checkbox on `line` (0-based) toggled, `[ ]` <->
+/// `[x]`; null when that line is no checklist item.
+pub fn toggleTaskLine(arena: Allocator, text: []const u8, line: usize) !?[]u8 {
+    var start: usize = 0;
+    var i: usize = 0;
+    while (i < line) : (i += 1) start = (std.mem.findScalarPos(u8, text, start, '\n') orelse return null) + 1;
+    const end = std.mem.findScalarPos(u8, text, start, '\n') orelse text.len;
+    const l = text[start..end];
+    const lead = l.len - std.mem.trimStart(u8, l, " \t").len;
+    const rest = l[lead..];
+    if (rest.len < 5 or std.mem.findScalar(u8, "-*+", rest[0]) == null or rest[1] != ' ' or rest[2] != '[' or rest[4] != ']') return null;
+    const mark = rest[3];
+    if (mark != ' ' and mark != 'x' and mark != 'X') return null;
+    const out = try arena.dupe(u8, text);
+    out[start + lead + 3] = if (mark == ' ') 'x' else ' ';
+    return out;
+}
+
+/// The local path of a `file://` link (`file:///p` or `file://localhost/p`,
+/// percent-decoded); null for other hosts, relative paths and other schemes.
+pub fn fileLinkPath(arena: Allocator, uri: []const u8) !?[]u8 {
+    const prefix = "file://";
+    if (uri.len < prefix.len or !std.ascii.eqlIgnoreCase(uri[0..prefix.len], prefix)) return null;
+    var rest = uri[prefix.len..];
+    if (std.ascii.startsWithIgnoreCase(rest, "localhost/")) rest = rest["localhost".len..];
+    if (rest.len < 2 or rest[0] != '/') return null;
+    const cut = std.mem.findAny(u8, rest, "?#") orelse rest.len;
+    const path = std.Uri.percentDecodeInPlace(try arena.dupe(u8, rest[0..cut]));
+    if (std.mem.findScalar(u8, path, 0) != null) return null;
+    return path;
+}
+
+test "fileLinkPath" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const a = arena_state.allocator();
+    try std.testing.expectEqualStrings("/home/me/Team Folder/blah.html", (try fileLinkPath(a, "file:///home/me/Team%20Folder/blah.html#befunde")).?);
+    try std.testing.expectEqualStrings("/tmp/x", (try fileLinkPath(a, "file://localhost/tmp/x")).?);
+    try std.testing.expect(try fileLinkPath(a, "file://server/share/x") == null);
+    try std.testing.expect(try fileLinkPath(a, "https://example.com/") == null);
+    try std.testing.expect(try fileLinkPath(a, "file:///a%00b") == null);
+}
+
+test "toggleTaskLine" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const a = arena_state.allocator();
+    const text = "Title\n- [ ] open\n    * [x] done\n- plain\n";
+    try std.testing.expectEqualStrings("Title\n- [x] open\n    * [x] done\n- plain\n", (try toggleTaskLine(a, text, 1)).?);
+    try std.testing.expectEqualStrings("Title\n- [ ] open\n    * [ ] done\n- plain\n", (try toggleTaskLine(a, text, 2)).?);
+    try std.testing.expect(try toggleTaskLine(a, text, 0) == null);
+    try std.testing.expect(try toggleTaskLine(a, text, 3) == null);
+    try std.testing.expect(try toggleTaskLine(a, text, 9) == null);
+}
+
 test "sources: counts, tree order, tags" {
     var arena: std.heap.ArenaAllocator = .init(testing.allocator);
     defer arena.deinit();

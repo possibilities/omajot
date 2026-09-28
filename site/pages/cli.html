@@ -214,7 +214,7 @@
   <h2><code>omajot tui</code></h2>
   <p>A terminal UI for your notes, like the plugin's main window: the folders, the tags and the Trash on the left, the notes in the middle, the note as formatted Markdown on the right. It uses the daemon like the other commands and starts one when none runs. When a note changes on another device, the TUI shows the change at once. The status bar shows the sync state: synced, syncing, connecting, offline, or local only.</p>
   <figure class="shot">{{shot:tui:omajot tui in Ghostty: folders and tags, the note list, and a note with a picture, a table and a checklist}}<figcaption>omajot tui in Ghostty. The picture uses the Kitty graphics protocol; the colours come from the Omarchy theme.</figcaption></figure>
-<pre><code>omajot tui [--data &lt;dir&gt;] [--socket &lt;path&gt;] [--no-start] [--hub &lt;url&gt; | --no-hub]</code></pre>
+<pre><code>omajot tui [--data &lt;dir&gt;] [--socket &lt;path&gt;] [--no-start] [--no-mouse] [--hub &lt;url&gt; | --no-hub]</code></pre>
   <div class="table"><table>
     <tr><th>Key</th><th>What it does</th></tr>
     <tr><td><code>j</code> <code>k</code>, <code>↓</code> <code>↑</code></td><td>Moves down and up in the column.</td></tr>
@@ -232,6 +232,7 @@
     <tr><td><code>?</code></td><td>Shows all keys.</td></tr>
     <tr><td><code>q</code></td><td>Quits.</td></tr>
   </table></div>
+  <p><strong>Mouse.</strong> Click a folder, tag or note to select it. Click a note twice to open it in the editor. In the note, click a checkbox to tick it, or a link to open it. Web and mail links open at once. A link to a local file (<code>file://</code>) opens after you confirm, and only if the file or folder exists on this computer and is no program. The wheel moves through the lists and scrolls the note. The pointer changes to a hand over things you can click. To select text with the mouse, hold <kbd>Shift</kbd>. <code>--no-mouse</code> turns the mouse off.</p>
   <p><strong>Editing.</strong> The TUI gives the terminal to your editor (<code>$VISUAL</code>, else <code>$EDITOR</code>, else <code>vi</code>) and comes back when the editor closes. Each save goes into the note at once. When the note also changes on another device while you edit, omajot keeps both changes and the status bar says <em>Saved and merged</em>. The Omarchy plugin and the web app can have the same note open at the same time.</p>
   <p><strong>Pictures</strong> show in terminals with the Kitty graphics protocol (Kitty, Ghostty, WezTerm). Other terminals show a line with the name of the picture. <strong>Colours</strong> come from the current Omarchy theme, else from a built-in dark theme. Set <code>NO_COLOR</code> to use the colours of your terminal. The icons need a <a href="https://www.nerdfonts.com/">Nerd Font</a>, as in Omarchy.</p>
   <p>The TUI needs at least 20 × 3 cells. From 110 columns it shows three columns, from 70 columns two, below that one. It gives the terminal back in all cases: when you quit, after an error, and on <code>SIGTERM</code>.</p>

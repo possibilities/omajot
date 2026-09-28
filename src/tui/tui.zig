@@ -37,6 +37,11 @@ pub const help =
     \\  ?               All keys
     \\  q               Quit
     \\
+    \\Mouse: click a folder, tag or note to select it; double-click a note to
+    \\edit it; click a checkbox in the note to tick it, or a link to open it.
+    \\The wheel moves through the lists and scrolls the note. Hold Shift to
+    \\select text with the mouse.
+    \\
     \\Every save in the editor goes to the daemon at once, as a change to the
     \\text you opened. When the note changes somewhere else while you edit,
     \\omajot keeps both changes.
@@ -49,6 +54,7 @@ pub const help =
     \\  --data <dir>     Use this data directory
     \\  --socket <path>  Use the daemon on this socket
     \\  --no-start       Do not start a daemon; fail with exit code 69
+    \\  --no-mouse       Keys only; the terminal keeps its own mouse selection
     \\  --hub <url>, --no-hub
     \\                   Hub for a daemon that omajot tui starts
     \\
@@ -56,6 +62,7 @@ pub const help =
 
 pub fn main(init: std.process.Init, argv: []const []const u8) !void {
     var opts: client.Options = .{};
+    var mouse = true;
     var i: usize = 0;
     while (i < argv.len) : (i += 1) {
         const a = argv[i];
@@ -68,6 +75,10 @@ pub fn main(init: std.process.Init, argv: []const []const u8) !void {
         }
         if (std.mem.eql(u8, a, "--no-hub")) {
             opts.no_hub = true;
+            continue;
+        }
+        if (std.mem.eql(u8, a, "--no-mouse")) {
+            mouse = false;
             continue;
         }
         if (std.mem.eql(u8, a, "--no-start")) {
@@ -92,7 +103,7 @@ pub fn main(init: std.process.Init, argv: []const []const u8) !void {
         std.debug.print("omajot tui: not available on this platform (this omajot was built without libvaxis).\nThe commands work: omajot ls, cat, search, edit (see omajot help).\n", .{});
         std.process.exit(exit.software);
     } else {
-        impl.run(init, opts);
+        impl.run(init, opts, mouse);
     }
 }
 

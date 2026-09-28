@@ -18,9 +18,18 @@ const Event = app_mod.Event;
 pub const panic = std.debug.FullPanic(struct {
     fn call(msg: []const u8, ret_addr: ?usize) noreturn {
         vaxis.recover();
+        if (test_panic) {
+            // The e2e test's deliberate panic: exit like an abort would
+            // (134), without the signal, so no crash report is made.
+            std.debug.print("omajot tui: panic: {s}\n", .{msg});
+            std.process.exit(134);
+        }
         std.debug.defaultPanic(msg, ret_addr);
     }
 }.call);
+
+/// Set when OMAJOT_TUI_PANIC_KEY is (the test's panic key is live).
+var test_panic = false;
 
 fn onTerminate(sig: std.posix.SIG) callconv(.c) void {
     vaxis.recover();
@@ -48,7 +57,7 @@ fn fail(code: u8, comptime fmt: []const u8, args: anytype) noreturn {
     std.process.exit(code);
 }
 
-pub fn run(init: std.process.Init, opts: client.Options) noreturn {
+pub fn run(init: std.process.Init, opts: client.Options, mouse: bool) noreturn {
     const io = init.io;
     const gpa = init.gpa;
     var arena_state: std.heap.ArenaAllocator = .init(gpa);
@@ -68,6 +77,7 @@ pub fn run(init: std.process.Init, opts: client.Options) noreturn {
         .tty = undefined,
         .loop = undefined,
         .data_dir = where.data,
+        .mouse = mouse,
         .scratch = .init(gpa),
         .list_arena = .init(gpa),
         .view_arena = .init(gpa),
@@ -101,6 +111,7 @@ pub fn run(init: std.process.Init, opts: client.Options) noreturn {
         handle(std.posix.SIG.QUIT, onInterrupt);
     }
 
+    test_panic = init.environ_map.get("OMAJOT_TUI_PANIC_KEY") != null;
     tui.active.store(true, .release);
     const result = session(&app, &loop, &vx, &tty);
 
@@ -128,6 +139,8 @@ fn session(app: *App, loop: *vaxis.Loop(Event), vx: *vaxis.Vaxis, tty: *vaxis.Tt
     try w.flush();
     try vx.queryTerminal(w, .fromSeconds(1));
     if (tty.getWinsize()) |ws| try vx.resize(gpa, w, ws) else |_| {}
+    // After the query: pixel coordinates where the terminal has them.
+    if (app.mouse) try vx.setMouseMode(w, true);
 
     try app.refresh();
     const events = try std.Thread.spawn(.{}, app_mod.eventThread, .{app});
@@ -135,17 +148,23 @@ fn session(app: *App, loop: *vaxis.Loop(Event), vx: *vaxis.Vaxis, tty: *vaxis.Tt
 
     var frame: std.heap.ArenaAllocator = .init(gpa);
     defer frame.deinit();
+    var redraw = true;
     while (true) {
-        _ = frame.reset(.retain_capacity);
-        try app.draw(frame.allocator());
-        try vx.render(w);
-        try w.flush();
+        if (redraw) {
+            _ = frame.reset(.retain_capacity);
+            try app.draw(frame.allocator());
+            try vx.render(w);
+            try w.flush();
+        }
         if (app.quit) return;
 
         const event = try loop.nextEvent();
         _ = app.scratch.reset(.retain_capacity);
+        redraw = true;
         switch (event) {
             .key_press => |k| try app.onKey(k),
+            // Plain motion (any-event tracking) redraws only when the pointer shape changes.
+            .mouse => |m| redraw = try app.onMouse(m),
             .winsize => |ws| try vx.resize(gpa, w, ws),
             .daemon => try app.onDaemon(),
         }

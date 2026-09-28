@@ -34,8 +34,13 @@ pub const Images = struct {
     };
 };
 
+/// A drawn checkbox: where it is in the pane (rows after scrolling, so the
+/// ones above the pane are negative) and its line in the note, for clicks.
+pub const TaskHit = struct { row: i32, col: u16, width: u16, line: usize };
+
 const Ctx = struct {
     win: Window,
+    tasks: ?*std.ArrayList(TaskHit) = null,
     arena: std.mem.Allocator,
     theme: Theme,
     commit: bool,
@@ -134,6 +139,36 @@ pub fn inlineSegments(arena: std.mem.Allocator, text: []const u8, base: Style, t
             s.ul_style = .single;
             try out.append(arena, .{ .text = text[i + 1 .. close], .style = s, .link = .{ .uri = text[close + 2 .. paren] } });
             i = paren + 1;
+            start = i;
+            continue;
+        }
+        // Bare URLs at a word start, and <url> autolinks.
+        const angle = rest[0] == '<';
+        const url_at = if (angle) rest[1..] else rest;
+        if ((std.mem.startsWith(u8, url_at, "https://") or std.mem.startsWith(u8, url_at, "http://")) and
+            (angle or i == 0 or text[i - 1] == ' ' or text[i - 1] == '(' or text[i - 1] == '\t'))
+        url: {
+            const from = i + @intFromBool(angle);
+            var end = from;
+            while (end < text.len and text[end] != ' ' and text[end] != '\t' and text[end] != '<' and text[end] != '>') end += 1;
+            if (angle) {
+                if (end >= text.len or text[end] != '>') break :url;
+            } else {
+                // Sentence punctuation stays outside, and ")" unless the URL opened one.
+                while (end > from) : (end -= 1) {
+                    const c = text[end - 1];
+                    if (std.mem.findScalar(u8, ".,;:!?'\"", c) != null) continue;
+                    if (c == ')' and std.mem.findScalar(u8, text[from .. end - 1], '(') == null) continue;
+                    break;
+                }
+            }
+            if (end - from <= "https://".len) break :url;
+            try flush(&out, arena, text[start..i], cur.style(base, bold, italic, strike));
+            var s = cur.style(base, bold, italic, strike);
+            s.fg = theme.c(theme.accent);
+            s.ul_style = .single;
+            try out.append(arena, .{ .text = text[from..end], .style = s, .link = .{ .uri = text[from..end] } });
+            i = end + @intFromBool(angle);
             start = i;
             continue;
         }
@@ -251,14 +286,15 @@ fn image(ctx: *Ctx, alt: []const u8, path: []const u8) !void {
 }
 
 /// Draws (commit) or measures `text`; returns the content height in rows.
-pub fn render(win: Window, arena: std.mem.Allocator, text: []const u8, theme: Theme, scroll: u16, commit: bool, images: ?Images) !u16 {
+/// With `tasks`, a drawing pass records where each checkbox went.
+pub fn render(win: Window, arena: std.mem.Allocator, text: []const u8, theme: Theme, scroll: u16, commit: bool, images: ?Images, tasks: ?*std.ArrayList(TaskHit)) !u16 {
     var content = win;
     if (commit) {
         content.y_off = win.y_off - @as(i17, scroll);
         content.parent_y_off = @min(win.parent_y_off - @as(i17, scroll), 0);
         content.height = win.height + scroll;
     } else content.height = 60000;
-    var ctx: Ctx = .{ .win = content, .arena = arena, .theme = theme, .commit = commit, .images = images, .scroll = scroll };
+    var ctx: Ctx = .{ .win = content, .arena = arena, .theme = theme, .commit = commit, .images = images, .scroll = scroll, .tasks = if (commit) tasks else null };
     const t = theme;
     var lines: std.ArrayList([]const u8) = .empty;
     var it = std.mem.splitScalar(u8, text, '\n');
@@ -348,6 +384,12 @@ pub fn render(win: Window, arena: std.mem.Allocator, text: []const u8, theme: Th
             var base: Style = .{ .fg = t.c(t.fg) };
             if (bullet and body.len >= 3 and body[0] == '[' and body[2] == ']') {
                 const done = body[1] == 'x' or body[1] == 'X';
+                if (ctx.tasks) |list| try list.append(arena, .{
+                    .row = @as(i32, ctx.row) - scroll,
+                    .col = indent,
+                    .width = @intCast(ctx.win.gwidth(if (done) glyph.task_done else glyph.task_open)),
+                    .line = i,
+                });
                 mark = .{ .text = if (done) glyph.task_done else glyph.task_open, .style = .{ .fg = t.c(if (done) t.accent else t.muted) } };
                 body = std.mem.trimStart(u8, body[3..], " ");
                 if (done) base = .{ .fg = t.c(t.muted), .strikethrough = true };
@@ -362,6 +404,21 @@ pub fn render(win: Window, arena: std.mem.Allocator, text: []const u8, theme: Th
         ctx.line(segs, indent);
     }
     return ctx.row;
+}
+
+test "inline segments: bare URLs and <url> are links" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const segs = try inlineSegments(arena.allocator(), "see https://a.example/x_y_z. and (https://b.example/p) <https://c.example/q> https://w.example/A_(b)", .{}, .{});
+    var links: std.ArrayList([]const u8) = .empty;
+    for (segs) |sg| if (sg.link.uri.len > 0) try links.append(arena.allocator(), sg.link.uri);
+    try std.testing.expectEqual(@as(usize, 4), links.items.len);
+    try std.testing.expectEqualStrings("https://a.example/x_y_z", links.items[0]);
+    try std.testing.expectEqualStrings("https://b.example/p", links.items[1]);
+    try std.testing.expectEqualStrings("https://c.example/q", links.items[2]);
+    try std.testing.expectEqualStrings("https://w.example/A_(b)", links.items[3]);
+    // No italics from the underscores inside a URL.
+    for (segs) |sg| try std.testing.expect(!sg.style.italic);
 }
 
 test "inline segments" {
@@ -414,9 +471,14 @@ test "render: widths, wrapping, table columns line up" {
         \\- [x] done
         \\- [ ] open
     ;
-    const measured = try render(win, arena, text, .{}, 0, false, null);
-    const drawn = try render(win, arena, text, .{}, 0, true, null);
+    const measured = try render(win, arena, text, .{}, 0, false, null, null);
+    var tasks: std.ArrayList(TaskHit) = .empty;
+    const drawn = try render(win, arena, text, .{}, 0, true, null, &tasks);
     try std.testing.expectEqual(measured, drawn);
+    // Both checkboxes are recorded for clicks: pane rows and note lines.
+    try std.testing.expectEqual(@as(usize, 2), tasks.items.len);
+    try std.testing.expectEqual(TaskHit{ .row = 11, .col = 0, .width = 1, .line = 9 }, tasks.items[0]);
+    try std.testing.expectEqual(@as(usize, 10), tasks.items[1].line);
     // Title, underline, blank, paragraph (2 rows at 40 columns), blank,
     // table (header, rule, 2 rows), blank, 2 tasks.
     try std.testing.expectEqual(@as(u16, 13), drawn);
@@ -439,8 +501,8 @@ test "render: scrolled drawing clips above the pane" {
     defer screen.deinit(std.testing.allocator);
     const win = testWindow(&screen);
     const text = "a\nb\nc\nd\ne\nf\ng\nh";
-    try std.testing.expectEqual(@as(u16, 8), try render(win, arena, text, .{}, 0, false, null));
-    _ = try render(win, arena, text, .{}, 3, true, null);
+    try std.testing.expectEqual(@as(u16, 8), try render(win, arena, text, .{}, 0, false, null, null));
+    _ = try render(win, arena, text, .{}, 3, true, null, null);
     try std.testing.expectEqualStrings("d", screen.readCell(0, 0).?.char.grapheme);
     try std.testing.expectEqualStrings("h", screen.readCell(0, 4).?.char.grapheme);
 }

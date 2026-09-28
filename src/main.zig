@@ -15,6 +15,11 @@ pub const panic = tui.panic;
 
 pub const std_options: std.Options = .{
     .logFn = log,
+    // Zig 0.16's connect() has no case for ECONNREFUSED on a unix socket (a
+    // stale socket file: the daemon is gone). Debug builds would print a
+    // stack trace for it, over the TUI; the error still comes back as
+    // error.Unexpected and is handled.
+    .unexpected_error_tracing = false,
     // libvaxis logs every resize at debug level.
     .log_scope_levels = &.{.{ .scope = .vaxis, .level = .warn }},
 };
