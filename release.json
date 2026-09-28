@@ -2,26 +2,26 @@
   "assets": {
     "aarch64-linux": {
       "name": "omajot-aarch64-linux",
-      "sha256": "73ece9c17cbdfa93f131ec5ba9f05db24cd1a819118292fb3880958733dc6812"
+      "sha256": "89598431a4d39b7846b0f0a6acf57117fe08dc737ce5a1f209947dca5b7f52d0"
     },
     "aarch64-macos": {
       "name": "omajot-aarch64-macos",
-      "sha256": "94a410482f0ed5a68461fe845faefad198441d6e5e1b435699345b10ad1ddb94"
+      "sha256": "3b31ed4fd24997b6bff9999fd02b9d603cb5bc204492482f4aa20f68c019f916"
     },
     "x86_64-linux": {
       "name": "omajot-x86_64-linux",
-      "sha256": "920f07911e5920037f3158e6ad104f53b687715bebf93dfc6c4ee877fb4a37dc"
+      "sha256": "be3ffb45cdd0961b3c6b4bef61dd68472bcc69e8079819f534a6e89a3518fc14"
     },
     "x86_64-macos": {
       "name": "omajot-x86_64-macos",
-      "sha256": "85a7b3fe8f900f9077c5a20344f07bea96604a69f7059604e6c54e26a3a72886"
+      "sha256": "23ebebcba533b4c6543c66d53f3ecdb22b98a820cfb67fe9cd5793bb195f3498"
     },
     "x86_64-windows": {
       "name": "omajot-x86_64-windows.exe",
-      "sha256": "a92edf16944338638bebd06f6fde7e14efa633fd83e823489f36cba8ff1def77"
+      "sha256": "fa3cdab90c4cb4effd282237da5c323444ed3c19e25d1af5a7da35aa1d1d95e5"
     }
   },
   "repo": "renerocksai/omajot",
-  "tag": "v0.1.7",
-  "version": "0.1.7"
+  "tag": "v0.1.8",
+  "version": "0.1.8"
 }
