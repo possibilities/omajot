@@ -65,7 +65,7 @@ Rectangle {
     text: {
       if (!root.note) return ""
       var parts = [Model.formatUpdated(root.note.updated, root.now)]
-      if (root.note.snippet) parts.push(Model.plainLine(root.note.snippet))
+      if (root.note.snippet) parts.push(Model.plainSnippet(root.note.snippet))
       else if ((root.note.tags || []).length > 0) parts.push("#" + root.note.tags.join(" #"))
       return parts.join("  ")
     }

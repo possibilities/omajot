@@ -316,6 +316,31 @@ export function renderMarkdown(src, opts = {}) {
   return renderBlocks(lines, opts, false, true)
 }
 
+// A note snippet as plain words, for the note list: no markup tokens ("-",
+// "[x]", "|", "##", ":--", "---"), no emphasis marks, links as their text.
+// The same rules as the TUI's plainSnippet (src/tui/model.zig).
+export function plainSnippet(raw) {
+  const out = []
+  for (const word of String(raw || '').split(/\s+/)) {
+    if (!word || /^[-*+>|#:[\]`=~]+$/.test(word) || /^\[[xX]\]$/.test(word)) continue
+    let w = ''
+    for (let i = 0; i < word.length; i++) {
+      const c = word[i]
+      if (c === '*' || c === '`' || c === '~' || c === '[') continue
+      if (c === '!' && word[i + 1] === '[') continue
+      if (c === ']' && word[i + 1] === '(') {
+        const close = word.indexOf(')', i)
+        i = close < 0 ? word.length : close
+        continue
+      }
+      if (c === '_' && (i === 0 || i + 1 === word.length)) continue
+      w += c
+    }
+    if (w) out.push(w)
+  }
+  return out.join(' ')
+}
+
 // Toggles the task checkbox whose `[` is at `off`. Returns the edit
 // { pos, del, ins } for the source, or null when there is no checkbox there.
 export function toggleTaskEdit(src, off) {

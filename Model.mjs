@@ -5,7 +5,7 @@
 // `node --test tests/` covers them. Positions are UTF-16 code units, the same
 // units QString, JS strings and the daemon protocol use (docs/PROTOCOL.md §1).
 
-import { renderMarkdown } from "./web/src/markdown.js"
+import { renderMarkdown, plainSnippet as markdownPlainSnippet } from "./web/src/markdown.js"
 
 export const PLUGIN_ID = "io.github.renerocksai.omajot"
 // No built-in hub: each user runs their own. "" = let the daemon use its config.
@@ -767,6 +767,11 @@ export function formatUpdated(ms, now) {
 
 export function plainLine(text) {
   return String(text === undefined || text === null ? "" : text).replace(/\s+/g, " ").trim()
+}
+
+// The note list's snippet: plain words, as in the web app and the TUI.
+export function plainSnippet(text) {
+  return markdownPlainSnippet(text)
 }
 
 export function syncLabel(state, pending) {

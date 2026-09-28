@@ -2,7 +2,7 @@
 // Narrow screens show one pane at a time; wide screens show all three.
 import { Replica } from './replica.js'
 import { NoteEditor } from './editor.js'
-import { renderMarkdown, toggleTaskEdit, escapeHtml } from './markdown.js'
+import { renderMarkdown, toggleTaskEdit, escapeHtml, plainSnippet } from './markdown.js'
 import { Attachments } from './attach.js'
 import { icon } from './icons.js'
 import { qrSvg } from './qr.js'
@@ -198,7 +198,7 @@ function renderList() {
     <div class="nrow ${n.id === state.current ? 'sel' : ''}" role="listitem" data-id="${escapeHtml(n.id)}" tabindex="0">
       <div class="ntitle">${n.pinned ? icon('pin', 'pinned') : ''}${escapeHtml(n.title || 'New Note')}</div>
       <div class="nmeta"><span class="ndate">${escapeHtml(shortDate(n.updated))}</span>
-        <span class="nsnip">${escapeHtml(n.snippet || 'No additional text')}</span></div>
+        <span class="nsnip">${escapeHtml(plainSnippet(n.snippet) || 'No additional text')}</span></div>
       ${showFolder ? `<div class="nfolder">${icon('folder')}${escapeHtml(folderName(n.folder))}</div>` : ''}
     </div>`
   let html = ''

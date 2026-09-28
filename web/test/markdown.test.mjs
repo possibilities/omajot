@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderMarkdown, renderInline, attachmentName, toggleTaskEdit } from '../src/markdown.js'
+import { renderMarkdown, renderInline, attachmentName, toggleTaskEdit, plainSnippet } from '../src/markdown.js'
 
 const SHA = 'a'.repeat(64)
 
@@ -124,4 +124,10 @@ test('ordered list start, nested tasks, loose lists', () => {
   assert.equal(renderMarkdown('3. c\n4. d'), '<ol start="3"><li>c</li><li>d</li></ol>')
   assert.equal(renderMarkdown('- a\n\n- b'), '<ul><li><p>a</p></li><li><p>b</p></li></ul>')
   assert.match(renderMarkdown('- [ ] top\n  - [x] sub'), /<li class="task-item">.*top<ul><li class="task-item done">.*sub<\/li><\/ul><\/li>/)
+})
+
+test('plainSnippet: list markup, tables and emphasis go', () => {
+  assert.equal(plainSnippet('- [x] Oat milk - [ ] Coffee beans --- - [x] Bread'), 'Oat milk Coffee beans Bread')
+  assert.equal(plainSnippet('Tram 28 | Day | Plan | | :-- | :-- |'), 'Tram 28 Day Plan')
+  assert.equal(plainSnippet('**Present:** Mia, `code` and [a link](https://x.example/y) _em_'), 'Present: Mia, code and a link em')
 })
