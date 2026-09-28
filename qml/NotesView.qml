@@ -28,6 +28,8 @@ FocusScope {
 
   signal closeRequested()
   signal openWindowRequested(string noteId)
+  // After the web app button started the web app window (the dropdown closes).
+  signal webAppOpened()
   signal tabRequested(int direction)
 
   // --- selection state ----------------------------------------------------------
@@ -391,13 +393,33 @@ FocusScope {
         tooltipText: "Open the web app"
         foreground: root.foreground
         fontFamily: root.fontFamily
-        onClicked: Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
+        onClicked: {
+          Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
+          root.webAppOpened()
+        }
+      }
+
+      // The dropdown only: the selected note in the main window. With the web
+      // app and phone buttons, the ways to open omajot elsewhere sit together.
+      PanelActionButton {
+        id: windowButton
+        anchors.right: webAppButton.visible ? webAppButton.left : phoneButton.left
+        anchors.rightMargin: Style.space(4)
+        anchors.verticalCenter: brand.verticalCenter
+        size: Style.space(22)
+        fontSize: Style.font.bodySmall
+        visible: root.showWindowButton
+        iconText: Model.GLYPH.window
+        tooltipText: "Open in a window  ·  o"
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onClicked: root.openWindowRequested(root.selectedNoteId)
       }
 
       Text {
         anchors.left: brand.right
         anchors.leftMargin: Style.space(8)
-        anchors.right: webAppButton.visible ? webAppButton.left : phoneButton.left
+        anchors.right: windowButton.visible ? windowButton.left : webAppButton.visible ? webAppButton.left : phoneButton.left
         anchors.rightMargin: Style.space(4)
         anchors.baseline: brand.baseline
         elide: Text.ElideRight
@@ -623,20 +645,8 @@ FocusScope {
       }
 
       PanelActionButton {
-        id: windowButton
-        visible: root.showWindowButton
-        anchors.right: parent.right
-        anchors.verticalCenter: sourceHeading.verticalCenter
-        iconText: Model.GLYPH.window
-        tooltipText: "Open in a window  ·  o"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        onClicked: root.openWindowRequested(root.selectedNoteId)
-      }
-
-      PanelActionButton {
         id: newNoteButton
-        anchors.right: root.showWindowButton ? windowButton.left : parent.right
+        anchors.right: parent.right
         anchors.verticalCenter: sourceHeading.verticalCenter
         iconText: Model.GLYPH.newNote
         tooltipText: "New note  ·  n / Ctrl+N"
