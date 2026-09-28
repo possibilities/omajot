@@ -388,7 +388,7 @@ FocusScope {
         fontSize: Style.font.bodySmall
         visible: phoneButton.visible && root.service.activeHub !== ""
         iconText: Model.GLYPH.webApp
-        tooltipText: "Open the web app in a window"
+        tooltipText: "Open the web app"
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
