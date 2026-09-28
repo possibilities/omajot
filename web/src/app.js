@@ -30,6 +30,11 @@ const state = {
 }
 
 let replica, editor, attachments
+
+// A new version found this soon after the start (and before typing) loads at
+// once; later it waits for a click. Open windows look for one this often.
+const UPDATE_AT_START_MS = 15000
+const UPDATE_CHECK_MS = 30 * 60 * 1000
 let app
 
 // ------------------------------------------------------------------ shell
@@ -492,13 +497,14 @@ function ask(opts) {
   })
 }
 
+// toast(text, { label, run, sticky }): sticky ones stay until their button.
 function toast(text, action) {
   const el = document.createElement('div')
   el.className = 'toast'
   el.innerHTML = `<span>${escapeHtml(text)}</span>${action ? `<button>${escapeHtml(action.label)}</button>` : ''}`
   if (action) el.querySelector('button').onclick = () => { action.run(); el.remove() }
   $('.toasts').append(el)
-  setTimeout(() => el.remove(), action ? 6000 : 3500)
+  if (!action?.sticky) setTimeout(() => el.remove(), action ? 6000 : 3500)
 }
 
 // ---------------------------------------------------------------- sidebar (mid widths)
@@ -728,13 +734,26 @@ async function main() {
   }
   for (const el of app.querySelectorAll('.notes.scroll, .folders.scroll')) attachPull(el, indicator, refresh)
 
+  // A new version: the app opens from the service worker's cache (so it
+  // opens offline), and the browser installs a newer sw.js in the background.
+  // Just after the start, before any typing, the app switches to it at once;
+  // later a notice stays until the reload. Open windows check again when they
+  // come back into view and every 30 minutes.
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('service worker:', e))
-    let reloadOffered = !!navigator.serviceWorker.controller
+    const loadedAt = performance.now()
+    let typed = false
+    addEventListener('keydown', () => { typed = true }, { capture: true, once: true })
+    let updating = !!navigator.serviceWorker.controller // false: the first install, nothing to reload
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloadOffered) toast('omajot was updated', { label: 'Reload', run: () => location.reload() })
-      reloadOffered = true
+      if (!updating) { updating = true; return }
+      if (performance.now() - loadedAt < UPDATE_AT_START_MS && !typed) return location.reload()
+      toast('A new omajot version is ready', { label: 'Reload', run: () => location.reload(), sticky: true })
     })
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      const check = () => reg.update().catch(() => {})
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) check() })
+      setInterval(check, UPDATE_CHECK_MS)
+    }).catch((e) => console.warn('service worker:', e))
   }
   window.omajot = { replica, state, editor } // for debugging and the e2e tests
 }
