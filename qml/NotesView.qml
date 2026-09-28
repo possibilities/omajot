@@ -377,10 +377,30 @@ FocusScope {
         onClicked: root.showPhone()
       }
 
+      // The web app in an Omarchy web app window, popped out like Super+O
+      // (tools/open-webapp.sh; focuses the window when it is open already).
+      PanelActionButton {
+        id: webAppButton
+        anchors.right: phoneButton.left
+        anchors.rightMargin: Style.space(4)
+        anchors.verticalCenter: brand.verticalCenter
+        size: Style.space(22)
+        fontSize: Style.font.bodySmall
+        visible: phoneButton.visible && root.service.activeHub !== ""
+        iconText: Model.GLYPH.webApp
+        tooltipText: "Open the web app in a window"
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onClicked: Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
+      }
+
       Text {
         anchors.left: brand.right
         anchors.leftMargin: Style.space(8)
+        anchors.right: webAppButton.visible ? webAppButton.left : phoneButton.left
+        anchors.rightMargin: Style.space(4)
         anchors.baseline: brand.baseline
+        elide: Text.ElideRight
         text: root.service ? root.service.syncText : ""
         color: root.service && root.service.daemonState !== "ready" ? Color.urgent : root.muted
         font.family: root.fontFamily
