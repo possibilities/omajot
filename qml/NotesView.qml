@@ -28,8 +28,8 @@ FocusScope {
 
   signal closeRequested()
   signal openWindowRequested(string noteId)
-  // After the web app button started the web app window (the dropdown closes).
-  signal webAppOpened()
+  // After the terminal UI or web app button started its window (the dropdown closes).
+  signal launched()
   signal tabRequested(int direction)
 
   // --- selection state ----------------------------------------------------------
@@ -365,75 +365,108 @@ FocusScope {
         font.bold: true
       }
 
-      PanelActionButton {
-        id: phoneButton
+      // The ways to open omajot elsewhere, together: the main window (the
+      // dropdown only), the terminal UI, the web app, the phone. The terminal
+      // UI and the web app open popped out like Super+O (tools/omarchy-pop.sh);
+      // a second click focuses the open window.
+      Row {
+        id: openButtons
         anchors.right: parent.right
         anchors.verticalCenter: brand.verticalCenter
-        size: Style.space(22)
-        fontSize: Style.font.bodySmall
-        visible: root.service !== null && root.service.daemonState === "ready"
-        iconText: Model.GLYPH.phone
-        tooltipText: root.service && root.service.activeHub !== "" ? "Open omajot on your phone" : "Use omajot on your phone"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        onClicked: root.showPhone()
-      }
+        spacing: Style.space(4)
 
-      // The web app in an Omarchy web app window, popped out like Super+O
-      // (tools/open-webapp.sh; focuses the window when it is open already).
-      PanelActionButton {
-        id: webAppButton
-        anchors.right: phoneButton.left
-        anchors.rightMargin: Style.space(4)
-        anchors.verticalCenter: brand.verticalCenter
-        size: Style.space(22)
-        fontSize: Style.font.bodySmall
-        visible: phoneButton.visible && root.service.activeHub !== ""
-        iconText: Model.GLYPH.webApp
-        tooltipText: "Open the web app"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        onClicked: {
-          Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
-          root.webAppOpened()
+        PanelActionButton {
+          id: windowButton
+          size: Style.space(22)
+          fontSize: Style.font.bodySmall
+          visible: root.showWindowButton
+          iconText: Model.GLYPH.window
+          tooltipText: "Open in a window  ·  o"
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: root.openWindowRequested(root.selectedNoteId)
+        }
+
+        PanelActionButton {
+          id: tuiButton
+          size: Style.space(22)
+          fontSize: Style.font.bodySmall
+          visible: phoneButton.visible && root.service.daemonBinary !== ""
+          iconText: Model.GLYPH.terminal
+          tooltipText: "Open the terminal UI"
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: {
+            Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-tui.sh"), root.service.daemonBinary, root.service.dataDir])
+            root.launched()
+          }
+        }
+
+        PanelActionButton {
+          id: webAppButton
+          size: Style.space(22)
+          fontSize: Style.font.bodySmall
+          visible: phoneButton.visible && root.service.activeHub !== ""
+          iconText: Model.GLYPH.webApp
+          tooltipText: "Open the web app"
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: {
+            Quickshell.execDetached(["bash", root.service.pluginPath("tools/open-webapp.sh"), root.service.activeHub])
+            root.launched()
+          }
+        }
+
+        PanelActionButton {
+          id: phoneButton
+          size: Style.space(22)
+          fontSize: Style.font.bodySmall
+          visible: root.service !== null && root.service.daemonState === "ready"
+          iconText: Model.GLYPH.phone
+          tooltipText: root.service && root.service.activeHub !== "" ? "Open omajot on your phone" : "Use omajot on your phone"
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: root.showPhone()
         }
       }
 
-      // The dropdown only: the selected note in the main window. With the web
-      // app and phone buttons, the ways to open omajot elsewhere sit together.
-      PanelActionButton {
-        id: windowButton
-        anchors.right: webAppButton.visible ? webAppButton.left : phoneButton.left
-        anchors.rightMargin: Style.space(4)
-        anchors.verticalCenter: brand.verticalCenter
-        size: Style.space(22)
-        fontSize: Style.font.bodySmall
-        visible: root.showWindowButton
-        iconText: Model.GLYPH.window
-        tooltipText: "Open in a window  ·  o"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        onClicked: root.openWindowRequested(root.selectedNoteId)
-      }
+      // The sync state at the bottom of the column, like the web app: a dot
+      // (accent: synced; muted: connecting or sending; urgent: offline or no
+      // daemon) and the text.
+      Row {
+        id: syncRow
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        spacing: Style.space(6)
+        readonly property bool problem: root.service !== null && (root.service.daemonState !== "ready" || root.service.syncState === "offline")
+        readonly property bool synced: root.service !== null && !problem && root.service.syncState === "online" && root.service.syncPending === 0
 
-      Text {
-        anchors.left: brand.right
-        anchors.leftMargin: Style.space(8)
-        anchors.right: windowButton.visible ? windowButton.left : webAppButton.visible ? webAppButton.left : phoneButton.left
-        anchors.rightMargin: Style.space(4)
-        anchors.baseline: brand.baseline
-        elide: Text.ElideRight
-        text: root.service ? root.service.syncText : ""
-        color: root.service && root.service.daemonState !== "ready" ? Color.urgent : root.muted
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        Rectangle {
+          anchors.verticalCenter: syncLabel.verticalCenter
+          width: Style.space(7)
+          height: width
+          radius: width / 2
+          color: syncRow.problem ? Color.urgent : syncRow.synced ? root.accent : root.muted
+        }
+
+        Text {
+          id: syncLabel
+          width: syncRow.width - Style.space(13)
+          elide: Text.ElideRight
+          text: root.service ? root.service.syncText : ""
+          color: syncRow.problem ? Color.urgent : root.muted
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+        }
       }
 
       ListView {
         id: sourceList
         anchors.top: brand.bottom
         anchors.topMargin: Style.space(12)
-        anchors.bottom: parent.bottom
+        anchors.bottom: syncRow.top
+        anchors.bottomMargin: Style.space(8)
         anchors.left: parent.left
         anchors.right: parent.right
         clip: true

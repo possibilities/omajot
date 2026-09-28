@@ -49,7 +49,7 @@ Panel {
       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
       editorFontSize: root.editorFontSize
       onCloseRequested: root.close()
-      onWebAppOpened: root.close()
+      onLaunched: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onOpenWindowRequested: function(noteId) {
         root.close()

@@ -49,6 +49,7 @@ export const GLYPH = {
   // Task boxes in the preview (Font Awesome square-o / check-square).
   phone: "\uf10b",
   webApp: "\uf0ac",
+  terminal: "\uf120",
   taskOpen: "\uf096",
   taskDone: "\uf14a"
 }
