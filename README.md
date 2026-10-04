@@ -257,8 +257,11 @@ The web app runs in the browser on every platform.
 
 omajot needs Zig **0.17.0** exactly (see `.zig-version`).
 
+Omarchy may still ship Zig 0.16.0, which cannot build this version of omajot.
 Download the matching 0.17.0 archive from
 [ziglang.org](https://ziglang.org/download/0.17.0/).
+Choose the archive for your operating system and CPU architecture, extract it,
+and put its directory first on your `PATH` before running the build commands.
 Check `zig version` before building. Distribution packages and development
 compiler installers can select a different version.
 CI and release builds use checksum-verified archive metadata in `.github/zig-release.json`.
