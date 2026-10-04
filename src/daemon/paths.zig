@@ -167,8 +167,8 @@ test "resolve: flags win, default socket follows the data directory" {
     try env.put("XDG_RUNTIME_DIR", "/run/user/1");
 
     const def = try resolve(arena, io, &env, .{});
-    try testing.expectEqualStrings("/run/user/1/omajot.sock", def.socket);
-    try testing.expect(std.mem.endsWith(u8, def.data, "/share/omajot"));
+    try testing.expectEqualStrings(if (builtin.os.tag == .windows) "/run/user/1\\omajot.sock" else "/run/user/1/omajot.sock", def.socket);
+    try testing.expect(std.mem.endsWith(u8, def.data, if (builtin.os.tag == .windows) "\\share\\omajot" else "/share/omajot"));
 
     const other = try resolve(arena, io, &env, .{ .data = "~/other" });
     try testing.expect(std.mem.startsWith(u8, other.socket, "/run/user/1/omajot-"));
@@ -179,7 +179,7 @@ test "resolve: flags win, default socket follows the data directory" {
 
     _ = env.swapRemove("XDG_RUNTIME_DIR");
     const mac = try resolve(arena, io, &env, .{ .data = "~/d" });
-    try testing.expect(std.mem.endsWith(u8, mac.socket, "/d/daemon.sock") or std.mem.indexOf(u8, mac.socket, "omajot-") != null);
+    try testing.expect(std.mem.endsWith(u8, mac.socket, if (builtin.os.tag == .windows) "\\d\\daemon.sock" else "/d/daemon.sock") or std.mem.indexOf(u8, mac.socket, "omajot-") != null);
 }
 
 test "home falls back to USERPROFILE when HOME is missing (Windows)" {
