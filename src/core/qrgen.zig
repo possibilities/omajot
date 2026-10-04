@@ -73,8 +73,8 @@ const ALIGN_POS = [10][]const usize{
 
 const GF = blk: {
     @setEvalBranchQuota(2000);
-    var exp = [_]u8{0} ** 256;
-    var logt = [_]u8{0} ** 256;
+    var exp: [256]u8 = @splat(0);
+    var logt: [256]u8 = @splat(0);
     var x: u16 = 1;
     var i: usize = 0;
     while (i < 255) : (i += 1) {
@@ -597,11 +597,11 @@ test "encode smoke test (tablet URL)" {
 
 test "capacity boundary" {
     // v10-M holds 216 data codewords -> 213 bytes max in byte mode.
-    var ok = [_]u8{'A'} ** 213;
+    var ok: [213]u8 = @splat('A');
     const code = try encode(&ok);
     try std.testing.expectEqual(@as(usize, 57), code.size); // v10
 
-    var too_long = [_]u8{'A'} ** 214;
+    var too_long: [214]u8 = @splat('A');
     try std.testing.expectError(error.DataTooLong, encode(&too_long));
 }
 

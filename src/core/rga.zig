@@ -235,7 +235,6 @@ fn u(comptime s: []const u8) []const u16 {
     return std.unicode.utf8ToUtf16LeStringLiteral(s);
 }
 
-
 test "typing extends one run; inserts and deletes land where expected" {
     const gpa = testing.allocator;
     var s: Seq = .{};

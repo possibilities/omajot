@@ -2,18 +2,18 @@
     .name = .omajot,
     .version = "0.1.10",
     .fingerprint = 0x5a15b30da7d19af7,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .baz = .{
-            .url = "https://github.com/technologylab-ai/baz/archive/c7d489a27dde958fcafbad6c9a31a4d94f28eae8.tar.gz",
-            .hash = "baz-0.1.0-q-QL0_WMZwDUYjL9MxarXngPK4jYQydz-ENJMhPLnl4S",
+            .url = "https://github.com/technologylab-ai/baz/archive/55099ec6ab894149088e5d6ca506e793f684bd34.tar.gz",
+            .hash = "baz-0.1.0-q-QL0xG3ZwAOzcf76C5Brs4SBzn_ktG0j2xBdYU_xTmU",
         },
-        // `omajot tui`. No release tag for Zig 0.16 yet: main at 173a890.
+        // `omajot tui`: immutable upstream zig-0.17 branch, with audited image/Unicode dependencies.
         .vaxis = .{
-            .url = "https://github.com/rockorager/libvaxis/archive/173a890d1394946b5d7623c66cd34bcd36d8eeb8.tar.gz",
-            .hash = "vaxis-0.6.0-BWNV_OybDABnzf12gCPzy_IgAjkKkonDJF-2O_7XyLtD",
+            .url = "https://github.com/rockorager/libvaxis/archive/6fd944a27fb3d6f596e981076381a3131f2448b4.tar.gz",
+            .hash = "vaxis-0.6.0-BWNV_MafDAAEzkVUvrW9NFUqnnMUoeHqrs2mecnD6D7w",
             .lazy = true,
         },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src", "docs", "LICENSE", "README.md" },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "web/dist", "docs", "LICENSE", "README.md" },
 }

@@ -15,7 +15,7 @@ if [ "${1:-}" = "--dest" ] && [ -n "${2:-}" ]; then dest=$2; fi
 manifest="$repo/release.json"
 
 fail() { echo "omajot install: $*" >&2; exit 1; }
-[ -f "$manifest" ] || fail "no release.json in $repo (build from source: zig build -Doptimize=ReleaseSafe)"
+[ -f "$manifest" ] || fail "no release.json in $repo (build from source: zig build -Doptimize=safe)"
 
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) platform=x86_64-linux ;;

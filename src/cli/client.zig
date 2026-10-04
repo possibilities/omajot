@@ -57,9 +57,9 @@ pub const Client = struct {
         const w = &c.sw.interface;
         w.print("{{\"id\":{d},\"cmd\":", .{id}) catch return error.ConnectionLost;
         json.Stringify.encodeJsonString(cmd, .{}, w) catch return error.ConnectionLost;
-        inline for (@typeInfo(@TypeOf(fields)).@"struct".fields) |f| {
-            w.writeAll(",\"" ++ f.name ++ "\":") catch return error.ConnectionLost;
-            json.Stringify.value(@field(fields, f.name), .{}, w) catch return error.ConnectionLost;
+        inline for (@typeInfo(@TypeOf(fields)).@"struct".field_names) |name| {
+            w.writeAll(",\"" ++ name ++ "\":") catch return error.ConnectionLost;
+            json.Stringify.value(@field(fields, name), .{}, w) catch return error.ConnectionLost;
         }
         w.writeAll("}\n") catch return error.ConnectionLost;
         w.flush() catch return error.ConnectionLost;

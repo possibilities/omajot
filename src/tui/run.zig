@@ -14,7 +14,7 @@ const App = app_mod.App;
 const Event = app_mod.Event;
 
 /// Restores the terminal (alt screen, raw mode, Kitty keyboard) on a panic.
-/// Not `vaxis.Panic`: at 173a890 it has the pre-0.15 three-argument `call`.
+/// Not `vaxis.Panic`: at 6fd944a it still has a three-argument `call`.
 pub const panic = std.debug.FullPanic(struct {
     fn call(msg: []const u8, ret_addr: ?usize) noreturn {
         vaxis.recover();
@@ -33,7 +33,7 @@ var test_panic = false;
 
 fn onTerminate(sig: std.posix.SIG) callconv(.c) void {
     vaxis.recover();
-    std.process.exit(128 +| @as(u8, @truncate(@intFromEnum(sig))));
+    std.process.exit(128 +| @as(u8, @truncate(@backingInt(sig))));
 }
 
 /// While the editor has the terminal, Ctrl+C and Ctrl+\ are for the editor.

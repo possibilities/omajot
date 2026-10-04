@@ -27,11 +27,11 @@ if the Joplin app runs and syncs with Dropbox, and nothing can be edited.
 | Network | **Tailscale** (`tailscale serve` provides HTTPS on `*.ts.net`) | Private, encrypted, real certs so the PWA works |
 | Dropbox | **Not used.** A Dropbox adapter may come later | "Nothing ever stored in Dropbox" |
 | Conflict handling | **CRDT**, written in Zig | Laptop and phone edit the same note offline |
-| Backend language | **Zig 0.16** (juicy main, `std.Io` passed explicitly) | Owner's preference; the same core compiles to wasm |
+| Backend language | **Zig 0.17.0** (exact release, `std.Io` passed explicitly) | Owner's preference; the same core compiles to wasm |
 | Desktop UI | **Pure QML/JS** plugin, no compiled QML modules | omarchy-shell loads plain QML; a `.so` would break on every Arch Qt update |
 | Web app | Static PWA served **by the hub**, core compiled to **wasm** | Offline-capable on the phone; one CRDT implementation everywhere |
 | Editor | **Markdown source + preview** (toggle / split), not WYSIWYG | Pure QML has no syntax highlighter; Qt's rich-text markdown round-trip rewrites the source and would create fake edits |
-| HTTP server | **baz** (on bounded/http) | Our own Zig 0.16 framework; see "What we take from baz" |
+| HTTP server | **baz** (on [bounded/http](https://technologylab-ai.github.io/bounded-http/)) | Our own Zig 0.17 framework; see "What we take from baz" |
 | Rejected | C++, Rust, Go, Electron | C++/Rust: owner dislikes them. Go: loses the shared wasm core |
 
 ### Why a hub, and not peer-to-peer over Tailscale
@@ -262,9 +262,9 @@ only handles the tags above), so the PWA can reuse it. If it gets hairy, lexbor
 - iOS: Safari may evict website storage after ~7 days without use unless the
   app is on the home screen; the hub holds everything anyway.
 
-## What we take from baz and bounded/http
+## What we take from baz and [bounded/http](https://technologylab-ai.github.io/bounded-http/)
 
-Both repos: `~/code/github.com/technologylab.ai/{baz,bounded-http}`, Zig 0.16.0,
+Both repos: `~/code/github.com/technologylab.ai/{baz,bounded-http}`, Zig 0.17.0,
 Linux io_uring / **macOS kqueue** / Windows IOCP. The hub runs on macOS, and
 baz's benchmarks were taken on an M3 Max, the same model as our hub.
 
@@ -373,7 +373,7 @@ For a hub that must survive reboots without a login:
   so it syncs and can itself be undone.
 - **Export, not a live mirror:** `omajot export <dir>` writes every note as
   `Folder/Title.md` plus its attachments, so notes are never locked in.
-- **TUI:** `omajot tui` on libvaxis (Zig 0.16): the plugin's three columns, the
+- **TUI:** `omajot tui` on libvaxis (Zig 0.17): the plugin's three columns, the
   Omarchy theme's colours, rendered markdown, images where the terminal supports
   them. Editing uses `$EDITOR` (nvim): each save is applied as a diff against the
   opened version, the same code path as `omajot edit`.

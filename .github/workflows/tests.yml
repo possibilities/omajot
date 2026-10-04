@@ -28,24 +28,58 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
+      - uses: actions/setup-python@v5
         with:
-          version: 0.16.0
-      - name: Zig tests (core, hub, daemon)
-        run: zig build test --summary all
+          python-version: "3.13"
+      - name: Install exact checksum-verified Zig
+        run: python .github/install_zig.py
+      - name: Verify native binary, all unit tests, WASM and formatting
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/omajot-ci"
+          zig version | tee "$RUNNER_TEMP/omajot-ci/compiler.log"
+          zig build verify -Doptimize=debug -j2 --summary all 2>&1 | tee "$RUNNER_TEMP/omajot-ci/debug.log"
+          zig build verify -Doptimize=safe -j2 --summary all 2>&1 | tee "$RUNNER_TEMP/omajot-ci/safe.log"
+          zig build -Doptimize=safe -j2
+      - name: CLI and synchronization integration
+        if: runner.os != 'Windows'
+        run: |
+          python tools/cli_e2e.py
+          python tools/e2e_sync.py --local
       - name: Build core.wasm
         run: zig build wasm
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       # tools/v4-smoke.sh (Qt's JS engine) needs a local Qt 6; run it with `npm test`.
-      - name: Plugin model tests
-        run: node --test tests/*.test.mjs
+      - name: Plugin model tests and WASM exports
+        run: |
+          node --test tests/*.test.mjs
+          node src/wasm/smoke.mjs
       - name: Web app tests
         working-directory: web
         run: |
           npm ci
           npm test
+
+      - name: Upload native verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omajot-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/omajot-ci
+          if-no-files-found: warn
+          retention-days: 14

@@ -199,7 +199,7 @@ test "versions group a replica's edits; textAt replays up to a time" {
         }
     };
     try Step.run(&a, &log, &out, 1_000_000, "{\"id\":1,\"cmd\":\"create\",\"text\":\"v1\\n\"}");
-    const reply = try json.parseFromSlice(json.Value, gpa, out.items[0 .. std.mem.findScalar(u8, out.items, '\n').?], .{});
+    const reply = try json.parseFromSlice(json.Value, gpa, out.items[0..std.mem.findScalar(u8, out.items, '\n').?], .{});
     defer reply.deinit();
     const nid = reply.value.object.get("note").?.string;
     const note = try engine.parseNoteId(nid);

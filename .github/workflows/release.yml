@@ -18,9 +18,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: mlugg/setup-zig@v2
+      - uses: actions/setup-python@v5
         with:
-          version: 0.16.0
+          python-version: "3.13"
+      - name: Install exact checksum-verified Zig
+        run: python .github/install_zig.py
 
       - name: Check that the tag matches the version
         run: |
@@ -62,7 +64,7 @@ jobs:
           pids=""
           for pair in $pairs; do
             target=${pair%%:*} platform=${pair##*:}
-            zig build -Dtarget="$target" -Doptimize=ReleaseSafe -Dstrip=true --prefix "out/$platform" \
+            zig build -Dtarget="$target" -Doptimize=safe -Dstrip=true --prefix "out/$platform" \
               > "build-$platform.log" 2>&1 &
             pids="$pids $!:$platform"
           done

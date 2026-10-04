@@ -50,7 +50,7 @@ pub const SyncState = enum(u8) { unknown, online, connecting, offline, conflict,
 const Shared = struct {
     notes_dirty: std.atomic.Value(bool) = .init(false),
     attachment: std.atomic.Value(bool) = .init(false),
-    sync: std.atomic.Value(u8) = .init(@intFromEnum(SyncState.unknown)),
+    sync: std.atomic.Value(u8) = .init(@backingInt(SyncState.unknown)),
     pending: std.atomic.Value(u32) = .init(0),
     /// 0: not known yet, 1: a hub, 2: no hub (local only).
     hub: std.atomic.Value(u8) = .init(0),
@@ -424,9 +424,9 @@ pub const App = struct {
             .quit => app.quit = true,
             .down => try app.move(1),
             .up => try app.move(-1),
-            .left => app.focus = @enumFromInt(@intFromEnum(app.focus) -| 1),
-            .right => app.focus = @enumFromInt(@min(@intFromEnum(app.focus) + 1, 2)),
-            .next_column => app.focus = @enumFromInt((@as(u8, @intFromEnum(app.focus)) + 1) % 3),
+            .left => app.focus = @fromBackingInt(@intCast(@backingInt(app.focus) -| 1)),
+            .right => app.focus = @fromBackingInt(@intCast(@min(@backingInt(app.focus) + 1, 2))),
+            .next_column => app.focus = @fromBackingInt(@intCast((@as(u8, @backingInt(app.focus)) + 1) % 3)),
             .first => switch (app.focus) {
                 .sources => try app.setSource(0),
                 .notes => app.setNote(0),
@@ -1234,7 +1234,7 @@ pub const App = struct {
 
     fn syncLabel(app: *App) struct { dot: []const u8, text: []const u8, color: [3]u8 } {
         const t = app.theme;
-        const state: SyncState = @enumFromInt(app.shared.sync.load(.acquire));
+        const state: SyncState = @fromBackingInt(@intCast(app.shared.sync.load(.acquire)));
         const pending = app.shared.pending.load(.acquire);
         if (state == .lost) return .{ .dot = "✕", .text = "No daemon, reconnecting", .color = t.warn };
         if (app.shared.hub.load(.acquire) == 2) return .{ .dot = "○", .text = "Local only (no hub)", .color = t.muted };
@@ -1393,7 +1393,7 @@ pub fn eventThread(app: *App) void {
         };
         if (c.call(a, "status", .{})) |s| {
             if (s.get("hub")) |h| app.shared.hub.store(if (h == .string and h.string.len > 0) 1 else 2, .release);
-            if (s.get("sync")) |v| if (v == .string) app.shared.sync.store(@intFromEnum(parseState(v.string)), .release);
+            if (s.get("sync")) |v| if (v == .string) app.shared.sync.store(@backingInt(parseState(v.string)), .release);
             if (s.get("pending")) |v| if (v == .integer) app.shared.pending.store(@intCast(@max(v.integer, 0)), .release);
         } else |_| {}
         app.shared.notes_dirty.store(true, .release);
@@ -1411,7 +1411,7 @@ pub fn eventThread(app: *App) void {
             if (std.mem.eql(u8, name, "notes") or std.mem.eql(u8, name, "folders")) {
                 app.shared.notes_dirty.store(true, .release);
             } else if (std.mem.eql(u8, name, "sync")) {
-                if (v.object.get("state")) |s| if (s == .string) app.shared.sync.store(@intFromEnum(parseState(s.string)), .release);
+                if (v.object.get("state")) |s| if (s == .string) app.shared.sync.store(@backingInt(parseState(s.string)), .release);
                 if (v.object.get("pending")) |p| if (p == .integer) app.shared.pending.store(@intCast(@max(p.integer, 0)), .release);
             } else if (std.mem.eql(u8, name, "attachment")) {
                 app.shared.attachment.store(true, .release);
@@ -1419,7 +1419,7 @@ pub fn eventThread(app: *App) void {
             wake(app);
         }
         lost_at = Io.Clock.awake.now(app.io).toMilliseconds();
-        app.shared.sync.store(@intFromEnum(SyncState.lost), .release);
+        app.shared.sync.store(@backingInt(SyncState.lost), .release);
         wake(app);
         app.io.sleep(.fromMilliseconds(500), .awake) catch {};
     }

@@ -647,8 +647,8 @@ test "qr returns a square module matrix; too-long text is a request error" {
     try testing.expectEqual(size, rows.len);
     for (rows) |row| try testing.expectEqual(size, row.string.len);
 
-    const long = "x" ** 400;
-    const bad = try call(&e, arena, 1, "{{\"id\":2,\"cmd\":\"qr\",\"text\":\"{s}\"}}", .{long});
+    const long: [400:0]u8 = @splat('x');
+    const bad = try call(&e, arena, 1, "{{\"id\":2,\"cmd\":\"qr\",\"text\":\"{s}\"}}", .{&long});
     try testing.expect(std.mem.find(u8, bad, "\"ok\":false") != null);
 }
 
