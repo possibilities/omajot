@@ -19,12 +19,12 @@ pub fn validName(name: []const u8) bool {
 pub fn contentType(name: []const u8) []const u8 {
     const ext = name[(std.mem.findScalarLast(u8, name, '.') orelse return "application/octet-stream") + 1 ..];
     const table = [_]struct { []const u8, []const u8 }{
-        .{ "png", "image/png" },       .{ "jpg", "image/jpeg" },       .{ "jpeg", "image/jpeg" },
-        .{ "gif", "image/gif" },       .{ "webp", "image/webp" },      .{ "avif", "image/avif" },
-        .{ "svg", "image/svg+xml" },   .{ "bmp", "image/bmp" },        .{ "ico", "image/x-icon" },
-        .{ "heic", "image/heic" },     .{ "pdf", "application/pdf" },  .{ "txt", "text/plain; charset=utf-8" },
-        .{ "md", "text/markdown; charset=utf-8" }, .{ "mp4", "video/mp4" }, .{ "mov", "video/quicktime" },
-        .{ "mp3", "audio/mpeg" },      .{ "m4a", "audio/mp4" },        .{ "zip", "application/zip" },
+        .{ "png", "image/png" },                   .{ "jpg", "image/jpeg" },      .{ "jpeg", "image/jpeg" },
+        .{ "gif", "image/gif" },                   .{ "webp", "image/webp" },     .{ "avif", "image/avif" },
+        .{ "svg", "image/svg+xml" },               .{ "bmp", "image/bmp" },       .{ "ico", "image/x-icon" },
+        .{ "heic", "image/heic" },                 .{ "pdf", "application/pdf" }, .{ "txt", "text/plain; charset=utf-8" },
+        .{ "md", "text/markdown; charset=utf-8" }, .{ "mp4", "video/mp4" },       .{ "mov", "video/quicktime" },
+        .{ "mp3", "audio/mpeg" },                  .{ "m4a", "audio/mp4" },       .{ "zip", "application/zip" },
     };
     for (table) |entry| if (std.ascii.eqlIgnoreCase(ext, entry[0])) return entry[1];
     return "application/octet-stream";

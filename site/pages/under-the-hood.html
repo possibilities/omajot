@@ -3,7 +3,7 @@
 <div class="page-head">
   <p class="eyebrow">For the nerds</p>
   <h1>Under the hood</h1>
-  <p class="lede">omajot is written in Zig 0.16 and QML. This page shows the parts, most of them animated: the architecture, the CRDT, the edits that cross on a pipe, the hub, the limits, the one core that runs natively and in the browser, and the one binary.</p>
+  <p class="lede">omajot is written in Zig 0.17 and QML. This page shows the parts, most of them animated: the architecture, the CRDT, the edits that cross on a pipe, the hub, the limits, the one core that runs natively and in the browser, and the one binary.</p>
   <nav class="toc" aria-label="On this page">
     <a href="#architecture">Architecture</a><a href="#crdt">The CRDT</a><a href="#transform">Edits and patches</a><a href="#hub">The hub</a><a href="#bounded">Everything bounded</a><a href="#wasm">One core, native and WASM</a><a href="#binary">One static binary</a><a href="#tests">Tests</a>
   </nav>
@@ -306,7 +306,7 @@ omj_pending(handle)      omj_engine_free(handle)      omj_free_result(result)</c
   <h2>One static binary</h2>
   <p>omajot is one program. The hub, the daemon, the terminal UI and every note command are subcommands of the same file, and the web app is inside it.</p>
   <div class="anatomy" data-play>
-    <div class="head">omajot <span>about 3.5 MB, static, no libc</span></div>
+    <div class="head">omajot <span>Linux: static musl</span></div>
     <div class="groups">
       <div class="grp"><h4>Servers</h4><div class="chips"><code style="--i:0">hub</code><code style="--i:1">daemon</code></div></div>
       <div class="grp"><h4>For people</h4><div class="chips"><code style="--i:2">tui</code><code style="--i:3">qr</code><code style="--i:4">status</code><code style="--i:5">--version</code></div></div>
@@ -315,8 +315,8 @@ omj_pending(handle)      omj_engine_free(handle)      omj_free_result(result)</c
     </div>
   </div>
   <ul>
-    <li><strong>Static, without libc:</strong> the Linux builds use the musl ABI and link no C library at all (<code>link_libc = false</code> in <code>build.zig</code>). Zig's standard library, baz and bounded/http talk to the kernel directly. <code>ldd</code> reports "not a dynamic executable".</li>
-    <li><strong>Small:</strong> a release build (<code>zig build -Doptimize=ReleaseSafe -Dstrip=true</code>) is about 3.5 MB, with the terminal UI and the web app. Safety checks stay on in ReleaseSafe.</li>
+    <li><strong>Static on Linux:</strong> the default builds use the musl ABI. The TUI dependency links libc, which musl includes statically. A root module's <code>link_libc = false</code> does not override its dependencies. Baz and the <a href="https://technologylab-ai.github.io/bounded-http/">bounded/http</a> engine permit applications with or without libc.</li>
+    <li><strong>Release size:</strong> build with <code>zig build -Doptimize=safe -Dstrip=true</code> to retain safety checks and strip debug information. The table below records the earlier 0.16 binary sizes; it does not measure the 0.17 port.</li>
     <li><strong>Cross-compiled:</strong> one Linux runner builds all five release targets, in parallel. The release workflow pins their SHA-256 in <code>release.json</code> and updates the Homebrew formula. <code>tools/install-release.sh</code> and the plugin check a download against the pinned hash before they install it.</li>
     <li><strong>The same core, also in the browser:</strong> the pure core goes to <code>wasm32-freestanding</code> too, as <code>core.wasm</code> ({{wasm_kib}} KiB).</li>
   </ul>

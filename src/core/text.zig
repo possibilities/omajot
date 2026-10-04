@@ -218,8 +218,13 @@ test "snippet collapses whitespace and caps codepoints" {
     defer testing.allocator.free(s);
     try testing.expectEqualStrings("a b c", s);
 
-    const long = "t\n" ++ "ü" ** 200;
-    const s2 = try snippet(testing.allocator, long);
+    const long = comptime blk: {
+        var bytes: [402:0]u8 = @splat(0);
+        @memcpy(bytes[0..2], "t\n");
+        for (0..200) |i| @memcpy(bytes[2 + 2 * i ..][0..2], "ü");
+        break :blk bytes;
+    };
+    const s2 = try snippet(testing.allocator, &long);
     defer testing.allocator.free(s2);
     try testing.expectEqual(@as(usize, 120), try std.unicode.utf8CountCodepoints(s2));
 

@@ -579,8 +579,8 @@ pub fn main(init: std.process.Init, args: []const []const u8) !void {
         std.posix.sigaction(.TERM, &action, null);
     }
     std.debug.print("omajot hub READY port={d} backend={s} data={s} head={d} web={s} auth={s}\n", .{
-        app.port(),              web.backend_name,                        options.data,
-        shared.log.head(),       assets.root,                 options.login orelse "OFF (--no-auth)",
+        app.port(),        web.backend_name, options.data,
+        shared.log.head(), assets.root,      options.login orelse "OFF (--no-auth)",
     });
     printPhoneUrl(gpa, io, options.url, app.port());
     app.run() catch |err| {

@@ -67,7 +67,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
-    if (b.args) |args| run.addArgs(args);
+    run.addPassthruArgs();
     b.step("run", "Run omajot").dependOn(&run.step);
 
     // core.wasm: the same core behind the export layer in src/wasm.
@@ -77,12 +77,12 @@ pub fn build(b: *std.Build) void {
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/wasm/wasm.zig"),
             .target = wasm_target,
-            .optimize = .ReleaseSmall,
+            .optimize = .small,
             .strip = true,
             .imports = &.{.{ .name = "core", .module = b.createModule(.{
                 .root_source_file = b.path("src/core/core.zig"),
                 .target = wasm_target,
-                .optimize = .ReleaseSmall,
+                .optimize = .small,
                 .imports = &.{.{ .name = "build_options", .module = options.createModule() }},
             }) }},
         }),
@@ -101,6 +101,12 @@ pub fn build(b: *std.Build) void {
         .use_lld = if (glibc) true else null,
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+
+    const verify = b.step("verify", "Compile maintained native/WASM code and run all unit tests");
+    verify.dependOn(test_step);
+    verify.dependOn(&wasm.step);
+    verify.dependOn(&exe.step);
+    verify.dependOn(&b.addFmt(.{ .paths = b.pathList(&.{ "build.zig", "src" }), .check = true }).step);
 }
 
 /// web/dist (committed) as a module: `omajot hub` serves this copy of the web
@@ -108,7 +114,8 @@ pub fn build(b: *std.Build) void {
 /// serves a directory instead.
 fn webAssets(b: *std.Build) *std.Build.Module {
     const io = b.graph.io;
-    var dist = b.build_root.handle.openDir(io, "web/dist", .{ .iterate = true }) catch |err|
+    b.dependOnDirectoryContents(b.path("web/dist"));
+    var dist = b.root.openDir(io, "web/dist", .{ .iterate = true }) catch |err|
         std.debug.panic("web/dist: {s} (build it with `cd web && npm run build`)", .{@errorName(err)});
     defer dist.close(io);
     var walker = dist.walk(b.allocator) catch @panic("OOM");
@@ -116,7 +123,7 @@ fn webAssets(b: *std.Build) *std.Build.Module {
     var files: std.ArrayList([]const u8) = .empty;
     while (walker.next(io) catch |err| std.debug.panic("web/dist: {s}", .{@errorName(err)})) |entry| {
         if (entry.kind != .file or std.mem.startsWith(u8, entry.basename, ".")) continue;
-        const path = b.dupe(entry.path);
+        const path = b.allocator.dupe(u8, entry.path) catch @panic("OOM");
         std.mem.replaceScalar(u8, path, '\\', '/');
         files.append(b.allocator, path) catch @panic("OOM");
     }

@@ -222,16 +222,12 @@ WantedBy=default.target</code></pre></li>
 
 <section id="source">
   <h2>Build from source <span class="badge opt">Optional</span></h2>
-  <p>omajot needs Zig 0.16.0 exactly.</p>
-  <ul>
-    <li><strong>Omarchy and Arch Linux:</strong> run <code>omarchy pkg add zig</code>. Arch ships Zig 0.16.0 today. If Arch has a newer Zig, install 0.16.0 with mise: <code>mise use -g zig@0.16.0</code>.</li>
-    <li><strong>macOS:</strong> download Zig 0.16.0 from <a href="https://ziglang.org/download/">ziglang.org</a>, or use mise: <code>mise use -g zig@0.16.0</code>.</li>
-  </ul>
-  <p>Check the version with <code>zig version</code>. It must show <code>0.16.0</code>.</p>
-  <div class="note"><p>Do not use <code>omarchy-install-dev-env zig</code>. It installs the latest Zig, and a newer Zig cannot build omajot.</p></div>
+  <p>omajot needs Zig <strong>0.17.0</strong> exactly, as pinned in <code>.zig-version</code>.</p>
+  <p>Download the matching 0.17.0 archive from <a href="https://ziglang.org/download/0.17.0/">ziglang.org</a>. Check <code>zig version</code> before building: it must show <code>0.17.0</code>.</p>
+  <div class="note"><p>Distribution packages and development compiler installers can select a different version. CI and release builds use checked-in, checksum-verified archive metadata.</p></div>
   <p>For the plugin, build in the plugin folder that <code>omarchy plugin add</code> made. The plugin then uses <code>zig-out/bin/omajot</code>:</p>
 <pre class="cmd"><code><span class="p">$ </span>cd ~/.config/omarchy/plugins/io.github.renerocksai.omajot
-<span class="p">$ </span>zig build -Doptimize=ReleaseSafe
+<span class="p">$ </span>zig build -Doptimize=safe
 <span class="p">$ </span>omarchy restart shell</code></pre>
   <p>For the hub, build in your clone and start <code>zig-out/bin/omajot hub …</code> instead of <code>bin/omajot hub …</code>.</p>
 </section>
@@ -264,7 +260,7 @@ WantedBy=default.target</code></pre></li>
   <p>Without Homebrew, in your omajot clone on the hub computer:</p>
 <pre class="cmd"><code><span class="p">$ </span>cd ~/omajot && git pull
 <span class="p">$ </span>tools/install-release.sh</code></pre>
-  <p>Then restart the hub: in its tmux session, press <kbd>Ctrl</kbd>+<kbd>c</kbd> and start it again. As a service, use <code>brew services restart omajot</code>, <code>systemctl --user restart omajot-hub</code> or the launchd commands in <a href="#boot">start at boot</a>. The web app is in the omajot binary, so the browsers and phones get the new web app from the new hub. <code>tools/install-release.sh</code> downloads a binary only if <code>bin/omajot</code> does not match the release in <code>release.json</code>. If you build from source, run <code>zig build -Doptimize=ReleaseSafe</code> instead.</p>
+  <p>Then restart the hub: in its tmux session, press <kbd>Ctrl</kbd>+<kbd>c</kbd> and start it again. As a service, use <code>brew services restart omajot</code>, <code>systemctl --user restart omajot-hub</code> or the launchd commands in <a href="#boot">start at boot</a>. The web app is in the omajot binary, so the browsers and phones get the new web app from the new hub. <code>tools/install-release.sh</code> downloads a binary only if <code>bin/omajot</code> does not match the release in <code>release.json</code>. If you build from source, run <code>zig build -Doptimize=safe</code> instead.</p>
 
   <h2>Update the plugin <span class="badge omarchy">Omarchy only</span></h2>
   <p>On your Omarchy computer. The plugin folder is the one that <code>omarchy plugin add</code> made:</p>

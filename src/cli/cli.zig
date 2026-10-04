@@ -881,9 +881,9 @@ fn cmdHistory(ctx: *Ctx) !void {
         var ab: [32]u8 = undefined;
         const who = if (v.self) "this computer" else try std.fmt.allocPrint(ctx.arena, "replica {s}", .{v.replica[0..@min(8, v.replica.len)]});
         try ctx.out.print("{d:>4}  {s}  {s:<12}  {s:<17}  +{d} -{d}{s}{s}\n", .{
-            n,                                 timefmt.local(&tb, &ctx.zone, v.t_last),
+            n,                                  timefmt.local(&tb, &ctx.zone, v.t_last),
             timefmt.ago(&ab, now_ms, v.t_last), who,
-            v.inserted,                        v.deleted,
+            v.inserted,                         v.deleted,
             if (v.created) "  created" else "", if (v.other > 0) "  moved/pinned/trashed" else "",
         });
     }

@@ -548,13 +548,13 @@ pub fn decodeEntities(gpa: Allocator, s: []const u8) ![]u8 {
             codepoint = parsed catch null;
         } else {
             const named = [_]struct { []const u8, u21 }{
-                .{ "amp", '&' },      .{ "lt", '<' },         .{ "gt", '>' },        .{ "quot", '"' },
-                .{ "apos", '\'' },    .{ "nbsp", ' ' },       .{ "hellip", 0x2026 }, .{ "mdash", 0x2014 },
-                .{ "ndash", 0x2013 }, .{ "lsquo", 0x2018 },   .{ "rsquo", 0x2019 },  .{ "ldquo", 0x201C },
-                .{ "rdquo", 0x201D }, .{ "copy", 0xA9 },      .{ "reg", 0xAE },      .{ "trade", 0x2122 },
-                .{ "euro", 0x20AC },  .{ "bull", 0x2022 },    .{ "middot", 0xB7 },   .{ "times", 0xD7 },
-                .{ "auml", 0xE4 },    .{ "ouml", 0xF6 },      .{ "uuml", 0xFC },     .{ "Auml", 0xC4 },
-                .{ "Ouml", 0xD6 },    .{ "Uuml", 0xDC },      .{ "szlig", 0xDF },    .{ "shy", 0xAD },
+                .{ "amp", '&' },      .{ "lt", '<' },       .{ "gt", '>' },        .{ "quot", '"' },
+                .{ "apos", '\'' },    .{ "nbsp", ' ' },     .{ "hellip", 0x2026 }, .{ "mdash", 0x2014 },
+                .{ "ndash", 0x2013 }, .{ "lsquo", 0x2018 }, .{ "rsquo", 0x2019 },  .{ "ldquo", 0x201C },
+                .{ "rdquo", 0x201D }, .{ "copy", 0xA9 },    .{ "reg", 0xAE },      .{ "trade", 0x2122 },
+                .{ "euro", 0x20AC },  .{ "bull", 0x2022 },  .{ "middot", 0xB7 },   .{ "times", 0xD7 },
+                .{ "auml", 0xE4 },    .{ "ouml", 0xF6 },    .{ "uuml", 0xFC },     .{ "Auml", 0xC4 },
+                .{ "Ouml", 0xD6 },    .{ "Uuml", 0xDC },    .{ "szlig", 0xDF },    .{ "shy", 0xAD },
             };
             for (named) |n| if (eql(body, n[0])) {
                 codepoint = n[1];

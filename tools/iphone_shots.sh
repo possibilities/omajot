@@ -5,7 +5,7 @@
 # Runs on a Linux or macOS computer and drives a Mac with Xcode over ssh:
 #
 #   1. rsync this checkout to <mac>:~/omajot-iphone-shots (never ~/omajot)
-#      and build omajot there (Zig 0.16.0 on the Mac's login PATH).
+#      and build omajot there (Zig 0.17.0 on the Mac's login PATH).
 #   2. Copy web/dist and add a small navigation script (shot-nav.js). The
 #      script opens a note or a view from the URL hash. It exists only in this
 #      copy, never in the web app.
@@ -23,7 +23,7 @@
 # Env: MAC (ssh host of the Mac, required), UDID (simulator, default an iPhone 17
 # Pro on iOS 26.5), PORT (demo hub, default 8791; never the real hub's port),
 # OUT (default site/assets/shots). Needs ssh, rsync, scp and ImageMagick here;
-# Xcode, tmux, python3 and Zig 0.16.0 on the Mac.
+# Xcode, tmux, python3 and Zig 0.17.0 on the Mac.
 set -euo pipefail
 
 MAC=${MAC:?set MAC to the ssh host name of your Mac, e.g. MAC=my-mac}
@@ -50,7 +50,7 @@ echo "== copy and build on $MAC"
 remote "lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null" && { echo "iphone_shots: port $PORT is busy on $MAC" >&2; exit 1; }
 rsync -a --delete --exclude zig-out --exclude .zig-cache --exclude zig-pkg --exclude node_modules \
   --exclude _site --exclude .git --exclude bin "$repo/" "$MAC:$REMOTE/"
-remote "cd ~/$REMOTE && zig build -Doptimize=ReleaseSafe"
+remote "cd ~/$REMOTE && zig build -Doptimize=safe"
 
 echo "== web app copy with the navigation script"
 cat > "$work/shot-nav.js" <<'EOF'

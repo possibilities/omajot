@@ -249,27 +249,26 @@ defaults. See the [CLI reference](https://renerocks.ai/omajot/cli.html).
 |---|---|
 | Linux x86_64, aarch64 | Static (musl). No shared libraries. |
 | macOS arm64, x86_64 | Native. |
-| Windows x86_64 | Experimental. It builds natively on bounded/http's IOCP backend. We did not run it as a hub yet. Tailscale for Windows supports `tailscale serve`. |
+| Windows x86_64 | Experimental. It builds natively on [bounded/http](https://technologylab-ai.github.io/bounded-http/)'s IOCP backend. We did not run it as a hub yet. Tailscale for Windows supports `tailscale serve`. |
 
 The web app runs in the browser on every platform.
 
 ## Build from source
 
-omajot needs Zig 0.16.0 exactly.
+omajot needs Zig **0.17.0** exactly (see `.zig-version`).
 
-- Omarchy and Arch Linux: `omarchy pkg add zig`. Arch ships Zig 0.16.0 today.
-  If Arch has a newer Zig, install 0.16.0 with mise: `mise use -g zig@0.16.0`.
-- macOS: download Zig 0.16.0 from [ziglang.org](https://ziglang.org/download/),
-  or use mise: `mise use -g zig@0.16.0`.
-- Do not use `omarchy-install-dev-env zig`. It installs the latest Zig, and a
-  newer Zig cannot build omajot.
+Download the matching 0.17.0 archive from
+[ziglang.org](https://ziglang.org/download/0.17.0/).
+Check `zig version` before building. Distribution packages and development
+compiler installers can select a different version.
+CI and release builds use checksum-verified archive metadata in `.github/zig-release.json`.
 
 For the plugin, build in the plugin folder that `omarchy plugin add` made, and
 restart the shell:
 
 ```sh
 cd ~/.config/omarchy/plugins/io.github.renerocksai.omajot
-zig build -Doptimize=ReleaseSafe
+zig build -Doptimize=safe
 omarchy restart shell
 ```
 
@@ -277,8 +276,8 @@ Development:
 
 ```sh
 zig build                 # zig-out/bin/omajot (Linux: static, musl)
-zig build -Doptimize=ReleaseSafe -Dstrip=true   # the release build, about 3.5 MB
-zig build test            # core, hub and daemon tests
+zig build -Doptimize=safe -Dstrip=true   # the release build
+zig build verify          # native unit tests, binary, WASM and formatting
 zig build wasm            # zig-out/web/core.wasm
 npm test                  # plugin model tests (+ a Qt JS engine smoke test)
 cd web && npm ci && npm run build && npm test && npm run e2e

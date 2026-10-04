@@ -52,10 +52,10 @@ fn writeNew(io: Io, dir: Io.Dir, name: []const u8, bytes: []const u8) !void {
 /// A safe extension: lowercase alphanumerics, ≤ 10 chars, "bin" otherwise.
 pub fn normalizeExt(ext: []const u8) []const u8 {
     const table = [_]struct { []const u8, []const u8 }{
-        .{ "png", "png" }, .{ "jpg", "jpg" },   .{ "jpeg", "jpg" }, .{ "gif", "gif" },   .{ "webp", "webp" },
-        .{ "svg", "svg" }, .{ "bmp", "bmp" },   .{ "avif", "avif" }, .{ "heic", "heic" }, .{ "pdf", "pdf" },
-        .{ "tif", "tiff" }, .{ "tiff", "tiff" }, .{ "txt", "txt" }, .{ "md", "md" },     .{ "zip", "zip" },
-        .{ "mp4", "mp4" }, .{ "mov", "mov" },   .{ "mp3", "mp3" },  .{ "m4a", "m4a" },   .{ "ico", "ico" },
+        .{ "png", "png" },  .{ "jpg", "jpg" },   .{ "jpeg", "jpg" },  .{ "gif", "gif" },   .{ "webp", "webp" },
+        .{ "svg", "svg" },  .{ "bmp", "bmp" },   .{ "avif", "avif" }, .{ "heic", "heic" }, .{ "pdf", "pdf" },
+        .{ "tif", "tiff" }, .{ "tiff", "tiff" }, .{ "txt", "txt" },   .{ "md", "md" },     .{ "zip", "zip" },
+        .{ "mp4", "mp4" },  .{ "mov", "mov" },   .{ "mp3", "mp3" },   .{ "m4a", "m4a" },   .{ "ico", "ico" },
     };
     for (table) |entry| if (std.ascii.eqlIgnoreCase(ext, entry[0])) return entry[1];
     return "bin";
@@ -64,8 +64,8 @@ pub fn normalizeExt(ext: []const u8) []const u8 {
 pub fn extForMime(mime: []const u8) []const u8 {
     const base = std.mem.trim(u8, mime[0 .. std.mem.findScalar(u8, mime, ';') orelse mime.len], " ");
     const table = [_]struct { []const u8, []const u8 }{
-        .{ "image/png", "png" },  .{ "image/jpeg", "jpg" },     .{ "image/jpg", "jpg" }, .{ "image/gif", "gif" },
-        .{ "image/webp", "webp" }, .{ "image/svg+xml", "svg" }, .{ "image/bmp", "bmp" }, .{ "image/avif", "avif" },
+        .{ "image/png", "png" },   .{ "image/jpeg", "jpg" },    .{ "image/jpg", "jpg" },       .{ "image/gif", "gif" },
+        .{ "image/webp", "webp" }, .{ "image/svg+xml", "svg" }, .{ "image/bmp", "bmp" },       .{ "image/avif", "avif" },
         .{ "image/heic", "heic" }, .{ "image/tiff", "tiff" },   .{ "application/pdf", "pdf" }, .{ "image/x-icon", "ico" },
     };
     for (table) |entry| if (std.ascii.eqlIgnoreCase(base, entry[0])) return entry[1];

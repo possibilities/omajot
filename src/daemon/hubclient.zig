@@ -64,7 +64,7 @@ pub const Hub = struct {
             .headers = .{ .content_type = if (content_type) |ct| .{ .override = ct } else .default },
         });
         if (body.written().len > max_response_bytes) return error.ResponseTooLarge;
-        return .{ .status = @intFromEnum(result.status), .body = try body.toOwnedSlice() };
+        return .{ .status = @backingInt(result.status), .body = try body.toOwnedSlice() };
     }
 
     /// Upload one attachment: a single PUT when it fits in one request

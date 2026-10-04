@@ -121,12 +121,12 @@ pub const verbs = [_]Verb{
         \\               "2026-09-26", or a time ago: 90s, 15m, 2h, 3d, 1w.
         \\
         ++ addressing ++
-        \\
-        \\Examples:
-        \\  omajot cat "Work/Plans/Q3"
-        \\  omajot cat n-3f9c2a1b7d4e5f60-42
-        \\  omajot cat Groceries --at 2d
-        \\
+            \\
+            \\Examples:
+            \\  omajot cat "Work/Plans/Q3"
+            \\  omajot cat n-3f9c2a1b7d4e5f60-42
+            \\  omajot cat Groceries --at 2d
+            \\
         ++ common,
     },
     .{
@@ -185,11 +185,11 @@ pub const verbs = [_]Verb{
         \\the name finds the note again.
         \\
         ++ addressing ++
-        \\
-        \\Examples:
-        \\  omajot cat Todo > todo.md; $EDITOR todo.md; omajot write Todo < todo.md
-        \\  printf '# Status\n\nAll green.\n' | omajot write Work/Status
-        \\
+            \\
+            \\Examples:
+            \\  omajot cat Todo > todo.md; $EDITOR todo.md; omajot write Todo < todo.md
+            \\  printf '# Status\n\nAll green.\n' | omajot write Work/Status
+            \\
         ++ common,
     },
     .{
@@ -212,11 +212,11 @@ pub const verbs = [_]Verb{
         \\after the editor closes.
         \\
         ++ addressing ++
-        \\
-        \\Examples:
-        \\  omajot edit Todo
-        \\  EDITOR="code --wait" omajot edit "Work/Plans/Q3"
-        \\
+            \\
+            \\Examples:
+            \\  omajot edit Todo
+            \\  EDITOR="code --wait" omajot edit "Work/Plans/Q3"
+            \\
         ++ common,
     },
     .{
