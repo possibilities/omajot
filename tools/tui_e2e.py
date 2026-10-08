@@ -442,6 +442,14 @@ def main():
         s = e.wait_screen(lambda s: "Delete folder?" in s and "No note is deleted." in s and
                           "Cancel" in s and all(cells(r) == 60 for r in rows(s)[:19]),
                           "folder confirmation fits a narrow terminal")
+        # Even with Delete selected, shrinking below the dialog's usable size
+        # must pause the action rather than permit an unseen confirmation.
+        e.keys("Tab")
+        e.tmux("resize-window", "-t", "tui", "-x", "20", "-y", "3")
+        e.wait_screen("Resize to 40x11.", "small terminal pauses folder deletion")
+        e.keys("Enter")
+        e.wait_screen("Resize to 40x11.", "Enter cannot accept an unseen folder confirmation")
+        assert e.call("list") == before, "small terminal allowed an unseen deletion"
         e.tmux("resize-window", "-t", "tui", "-x", str(W), "-y", str(H))
         e.wait_screen(lambda s: "Delete folder?" in s and cells(rows(s)[0]) == W, "confirmation back to full size")
         e.keys("Escape")
@@ -521,6 +529,25 @@ def main():
         assert e.call("list") == before, "stale confirmation deleted another folder or note"
         assert "Deleted the folder" not in status(e.screen()), "false deletion success"
         ok("y on a remotely deleted target reports the refusal without changing another source")
+
+        # A legal folder path can exceed libvaxis's u16 display-width range.
+        # Only the displayed suffix may be shortened, never the deletion ID.
+        long_parent = e.call("folder.create", name="🌱" * 32770, parent=None)["folder"]
+        long_target = e.call("folder.create", name="Display tail 🌱", parent=long_parent)["folder"]
+        folders = folder_order(e.call("list")["folders"])
+        idx = [f["id"] for f in folders].index(long_target)
+        e.keys("g", *["j"] * (3 + idx), "x")
+        s = e.wait_screen(lambda s: "Delete folder?" in s and "Display tail 🌱" in s,
+                          "oversized folder path shows a valid display suffix")
+        assert "…" in s, "long path has no truncation indicator"
+        e.keys("y")
+        s = e.wait_screen("Deleted the folder", "oversized path confirms without a panic")
+        assert "Deleted the folder" in status(s), "wide deletion status scrolled the screen"
+        assert rows(s)[0].startswith("╭") and all(cells(r) == W for r in rows(s)[:H - 1]), \
+            "wide deletion status corrupted the layout"
+        ids = {f["id"] for f in e.call("list")["folders"]}
+        assert long_target not in ids and long_parent in ids, "truncated path changed the deletion target"
+        ok("an oversized Unicode folder path displays a suffix and deletes only the captured ID")
 
         # -------------------------------------------------- live refresh
         e.keys("g", "l")

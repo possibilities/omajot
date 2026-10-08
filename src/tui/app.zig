@@ -93,6 +93,8 @@ const Areas = struct {
 
 /// Two clicks on the same note within this time open it in the editor.
 const double_click_ms = 400;
+/// libvaxis measures widths in u16; folder paths have no length limit.
+const confirm_display_bytes = 256;
 const Mode = enum { browse, search, prompt, picker, help, confirm };
 const Prompt = enum { new_note, new_folder, rename_folder };
 const Confirm = enum { open_file, delete_folder };
@@ -715,7 +717,18 @@ pub const App = struct {
         app.mode = .confirm;
     }
 
+    /// Keep deletion paused when the terminal cannot show its consequences
+    /// and both buttons, including after a resize with Delete selected.
+    fn folderConfirmationFits(app: *App) bool {
+        const win = app.vx.window();
+        return win.width >= 40 and win.height >= 11;
+    }
+
     fn confirmAction(app: *App) !void {
+        if (app.confirm == .delete_folder and !app.folderConfirmationFits()) {
+            app.say(.warn, "Resize to 40x11 to delete a folder. Esc cancels.", .{});
+            return;
+        }
         app.mode = .browse;
         switch (app.confirm) {
             .open_file => if (app.launch(app.confirm_path.items)) {
@@ -1253,20 +1266,32 @@ pub const App = struct {
     fn drawConfirm(app: *App, win: vaxis.Window) void {
         const t = app.theme;
         const deleting = app.confirm == .delete_folder;
-        const name = if (deleting) app.confirm_name else app.confirm_path.items;
-        const width: u16 = @intCast(@min(@max(win.gwidth(name) + 6, if (deleting) @as(u16, 64) else 46), win.width -| 4));
+        if (deleting and !app.folderConfirmationFits()) {
+            win.fill(.{ .style = app.st(t.fg, t.bg_side) });
+            _ = win.print(&.{.{ .text = "Resize to 40x11.\nEsc cancels.", .style = app.st(t.fg, t.bg_side) }}, .{});
+            app.areas.confirm_box = .of(win);
+            return;
+        }
+        const full_name = if (deleting) app.confirm_name else app.confirm_path.items;
+        var name = full_name;
+        if (name.len > confirm_display_bytes) {
+            var cut = name.len - confirm_display_bytes;
+            while (cut < name.len and name[cut] & 0xC0 == 0x80) cut += 1;
+            name = name[cut..];
+        }
+        const width: u16 = @intCast(@min(@max(win.gwidth(name) +| 6, if (deleting) @as(u16, 64) else 46), win.width -| 4));
         const inner = app.box(win, width, if (deleting) 10 else 7, if (deleting) " Delete folder? " else " Open a file from the note? ");
         // The whole box, border included: a click outside it cancels.
         app.areas.confirm_box = .{ .x = @as(i32, inner.x_off) - 2, .y = @as(i32, inner.y_off) - 1, .w = inner.width + 4, .h = inner.height + 2 };
         // The end of a long path matters most: show that.
         var shown: []const u8 = name;
-        while (shown.len > 0 and inner.gwidth(shown) + 2 > inner.width) {
+        while (shown.len > 0 and inner.gwidth(shown) +| 2 > inner.width) {
             var cut: usize = 1;
             while (cut < shown.len and shown[cut] & 0xC0 == 0x80) cut += 1;
             shown = shown[cut..];
         }
         _ = inner.child(.{ .y_off = 1, .height = 1 }).print(&.{
-            .{ .text = if (shown.len < name.len) "…" else "", .style = app.st(t.muted, t.bg_side) },
+            .{ .text = if (shown.len < full_name.len) "…" else "", .style = app.st(t.muted, t.bg_side) },
             .{ .text = shown, .style = app.st(t.fg, t.bg_side) },
         }, .{ .wrap = .none });
         if (deleting) {
@@ -1389,7 +1414,7 @@ pub const App = struct {
             .ok => t.ok,
             .warn => t.warn,
         };
-        const left = bar.print(&.{
+        var status_segments = [_]vaxis.Segment{
             .{ .text = " ", .style = bs },
             .{ .text = sync.dot, .style = app.st(sync.color, t.bg_side) },
             .{ .text = " ", .style = bs },
@@ -1397,7 +1422,24 @@ pub const App = struct {
             .{ .text = count, .style = bs },
             .{ .text = "   ", .style = bs },
             .{ .text = app.message, .style = app.st(tone_color, t.bg_side) },
-        }, .{ .wrap = .none });
+        };
+        // wrap=none stops at a cell's start, so a wide final grapheme can
+        // cross the terminal's right edge and scroll the whole screen.
+        var remaining = bar.width;
+        for (&status_segments) |*segment| {
+            var end: usize = 0;
+            var iter = vaxis.unicode.graphemeIterator(segment.text);
+            while (iter.next()) |grapheme| {
+                const text = grapheme.bytes(segment.text);
+                if (std.mem.eql(u8, text, "\n")) break;
+                const width = bar.gwidth(text);
+                if (width > remaining) break;
+                remaining -= width;
+                end = grapheme.start + grapheme.len;
+            }
+            segment.text = segment.text[0..end];
+        }
+        const left = bar.print(&status_segments, .{ .wrap = .none });
         const hints = switch (app.mode) {
             .browse => if (app.focus == .sources)
                 "? help · / search · N folder · r rename · x delete folder · q quit"

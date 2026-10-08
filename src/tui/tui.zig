@@ -40,6 +40,7 @@ pub const help =
     \\Folder deletion asks first and defaults to Cancel. Tab selects Delete,
     \\Enter confirms; y deletes, Esc or n cancels. Notes move to Notes and
     \\subfolders move up one level. No note is deleted.
+    \\Deletion pauses below 40 x 11 cells: resize or cancel with Esc.
     \\
     \\Mouse: click a folder, tag or note to select it; double-click a note to
     \\edit it; click a checkbox in the note to tick it, or a link to open it.
